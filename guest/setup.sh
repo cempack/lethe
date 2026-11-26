@@ -36,11 +36,34 @@ g org.gnome.desktop.interface enable-animations false
 # Drop the two GNOME Classic panels (the "Apps" menu and the bottom window list)
 # for a clean desktop; Tails' own Tor status and power menu stay. Apps and open
 # windows are one click away in the top-left corner.
-g org.gnome.shell enabled-extensions "['status-menu-helper@tails.boum.org', 'date@tails.boum.org', 'torstatus@tails.boum.org', 'no-overview@fthx']"
+g org.gnome.shell enabled-extensions "['status-menu-helper@tails.boum.org', 'date@tails.boum.org', 'torstatus@tails.boum.org', 'no-overview@fthx', 'lethe@lethe']"
+# The Lethe desktop: a dock, a quieter top bar and the receiving end of the one-way clipboard.
+# Lethe loads it right after this script (GNOME would otherwise wait for the next login).
+X="$HOME/.local/share/gnome-shell/extensions/lethe@lethe"
+mkdir -p "$X"
+cp "$D/ext.js" "$X/extension.js"
+cp "$D/ext.css" "$X/stylesheet.css"
+cp "$D/ext.jsn" "$X/metadata.json"
+cp "$D/mark.svg" "$X/mark.svg"
+# Text at the size you are used to: Lethe shows Tails pixel for pixel, at your screen's scale.
+S=$(cat "$D/scale.txt" 2>/dev/null)
+[ -n "$S" ] && g org.gnome.desktop.interface text-scaling-factor "$S"
+# Lethe's app icons, layered over the stock ones.
+[ -f "$D/icons.tar" ] && mkdir -p "$HOME/.local/share/icons" && tar -xf "$D/icons.tar" -C "$HOME/.local/share/icons" \
+  && g org.gnome.desktop.interface icon-theme 'Lethe'
+# Two launchers name an icon file instead of an icon: point them at the theme.
+mkdir -p "$HOME/.local/share/applications"
+for a in org.boum.tails.TorBrowser unsafe-browser; do
+  [ -f "/usr/share/applications/$a.desktop" ] && sed "s|^Icon=.*|Icon=$a|" "/usr/share/applications/$a.desktop" \
+    > "$HOME/.local/share/applications/$a.desktop"
+done
 # Lethe palette for every GTK app started from now on.
 mkdir -p "$HOME/.config/gtk-4.0" "$HOME/.config/gtk-3.0"
 cp "$D/gtk4.css" "$HOME/.config/gtk-4.0/gtk.css"
 cp "$D/gtk3.css" "$HOME/.config/gtk-3.0/gtk.css"
+# Title bars of older apps (Tor Connection, Tor Browser) are drawn by a helper that GNOME started
+# before this stylesheet existed. GNOME starts it again at once, now with the Lethe window buttons.
+pkill -u "$(id -u)" -x mutter-x11-frames 2>/dev/null
 g org.gnome.Console theme night
 g org.gnome.TextEditor style-variant dark
 # Launcher favourites: what makes sense in a VM (no USB installer, no Persistent Storage).

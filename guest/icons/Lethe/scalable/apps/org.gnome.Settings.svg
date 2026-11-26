@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+<defs>
+  <linearGradient id="b" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#a3a6ae"/><stop offset="1" stop-color="#5a5d66"/></linearGradient>
+  <linearGradient id="r" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity="0.2"/><stop offset="0.5" stop-color="#fff" stop-opacity="0.03"/><stop offset="1" stop-color="#000" stop-opacity="0.18"/></linearGradient>
+  <filter id="s" x="-10%" y="-10%" width="120%" height="130%"><feDropShadow dx="0" dy="2" stdDeviation="2.2" flood-color="#000" flood-opacity="0.35"/></filter>
+</defs>
+<g filter="url(#s)"><rect x="8" y="8" width="112" height="112" rx="26" fill="url(#b)"/></g>
+<rect x="8.5" y="8.5" width="111" height="111" rx="25.5" fill="none" stroke="url(#r)"/>
+<g transform="translate(64 64)"><rect x="-5.5" y="-33" width="11" height="14" rx="3" fill="#fff" transform="rotate(0)"/><rect x="-5.5" y="-33" width="11" height="14" rx="3" fill="#fff" transform="rotate(45)"/><rect x="-5.5" y="-33" width="11" height="14" rx="3" fill="#fff" transform="rotate(90)"/><rect x="-5.5" y="-33" width="11" height="14" rx="3" fill="#fff" transform="rotate(135)"/><rect x="-5.5" y="-33" width="11" height="14" rx="3" fill="#fff" transform="rotate(180)"/><rect x="-5.5" y="-33" width="11" height="14" rx="3" fill="#fff" transform="rotate(225)"/><rect x="-5.5" y="-33" width="11" height="14" rx="3" fill="#fff" transform="rotate(270)"/><rect x="-5.5" y="-33" width="11" height="14" rx="3" fill="#fff" transform="rotate(315)"/><circle r="22" fill="#fff"/><circle r="9" fill="#7c7f88"/></g>
+</svg>

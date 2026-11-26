@@ -7,7 +7,9 @@ would, so the Tails image stays byte-for-byte the signed original:
      language and keyboard stay on the English/US defaults);
   2. waits for the desktop, opens GNOME's run prompt (Alt+F2) and runs the
      hardening script from the read-only LETHE config disc;
-  3. confirms it worked by watching the wallpaper change.
+  3. confirms it worked by watching the wallpaper change;
+  4. loads the Lethe shell extension (dock, top bar, clipboard) from the
+     Looking Glass console, which the extension then switches off.
 
 Nothing is timed: every step waits for what is actually on screen, so a slow
 machine just takes longer. If a step cannot be recognised the autopilot stops
@@ -19,6 +21,12 @@ TAILS_BLUE = (32, 74, 135)       # Tails desktop / greeter background
 SELECTED = bytes((228, 132, 53, 255))   # GNOME selection blue, as BGRA
 DISC = "/dev/disk/by-label/LETHE"   # mounted for the script, ejected right after
 COMMAND = f'sh -c "udisksctl mount -b {DISC}; sh /media/amnesia/LETHE/setup.sh; udisksctl unmount -b {DISC}"'
+# Typed into GNOME's Looking Glass console (Alt+F2, "lg"): loads the Lethe shell extension that
+# setup.sh put in place. GNOME only scans for extensions at login; this loads it now, without one.
+EXT = "lethe@lethe"
+LOADER = ("import('resource:///org/gnome/shell/ui/main.js').then(async M=>{let G=(await import('gi://Gio')).default,"
+          f"m=M.extensionManager,u='{EXT}';if(!m.lookup(u))await m.loadExtension(m.createExtensionObject(u,"
+          "G.File.new_for_path('/home/amnesia/.local/share/gnome-shell/extensions/'+u),2));m.enableExtension(u)})")
 EDGES = [(0.004, 0.3), (0.004, 0.55), (0.004, 0.8), (0.996, 0.3), (0.996, 0.55), (0.996, 0.8)]
 
 
@@ -27,7 +35,7 @@ class Pilot(threading.Thread):
         super().__init__(daemon=True)
         self.screen, self.control, self.session, self.report = screen, control, session, report
         self.harden, self.connect = harden, connect
-        self.hardened = self.online = False
+        self.hardened = self.online = self.desktop = False
 
     # -- reading the screen --------------------------------------------------
     def _look(self):
@@ -132,6 +140,63 @@ class Pilot(threading.Thread):
             self.control.tap("esc")
         time.sleep(1.5 * slow)                 # the command's last step unmounts the disc
         self.control.eject("cfgdisc")          # then it leaves the VM for good
+        if self.hardened:
+            self.desktop = self._load_desktop(slow)
+
+    def _load_desktop(self, slow):
+        """Loads the Lethe shell extension (dock, top bar, clipboard) through Looking Glass.
+        The extension switches Looking Glass off again as soon as it runs."""
+        edge = lambda: self._look() and self._at(0.004, 0.5)
+        # Tails opens the Tor Connection window right after login, and a window appearing takes the
+        # keyboard: wait for the screen to stop changing before typing anything.
+        self._settle(10 * slow)
+        for attempt in range(3):
+            plain = edge()
+            self.control.tap("alt", "f2")
+            if not self._wait(lambda: not self._near(edge(), plain, 4), 8 * slow, 0.2):   # the prompt dims the screen
+                continue
+            time.sleep(0.4 * slow)
+            self.control.type("lg", 0.03 * slow)
+            time.sleep(0.3 * slow)
+            self.control.tap("ret")
+            time.sleep((1.5 + attempt) * slow)       # Looking Glass slides down, its prompt focused
+            self.control.type(LOADER, 0.008 * slow)
+            time.sleep(0.4 * slow)
+            self.control.tap("ret")
+            if self._wait(self._dock, 6 * slow, 0.3):
+                time.sleep(0.5 * slow)
+                if self._dock():
+                    self.control.tap("esc")          # Looking Glass, if it is still on its way out
+                    return True
+            for _ in range(2):
+                self.control.tap("esc")
+                time.sleep(0.3 * slow)
+            self._settle(5 * slow)
+        return False
+
+    def _settle(self, timeout):
+        """Waits until the screen has stayed the same for a second."""
+        last, since, end = None, time.time(), time.time() + timeout
+        while time.time() < end and self.session.alive():
+            now = self._look() and bytes(self.px[::4099])
+            if now != last:
+                last, since = now, time.time()
+            elif time.time() - since >= 1:
+                return True
+            time.sleep(0.2)
+        return False
+
+    def _dock(self):
+        """The Lethe dock: a row of coloured app icons along the bottom middle of the screen."""
+        if not self._look():
+            return False
+        colourful = 0
+        for y in range(self.h - 100, self.h - 15, 5):
+            for x in range(int(self.w * 0.3), int(self.w * 0.7), 4):
+                o = (y * self.w + x) * 4
+                b, g, r = self.px[o], self.px[o + 1], self.px[o + 2]
+                colourful += max(r, g, b) > 150 and max(r, g, b) - min(r, g, b) > 90
+        return colourful > 40
 
     def _desktop_bar(self):
         return self._look() and max(self._at(0.3, 0.008)) < 60

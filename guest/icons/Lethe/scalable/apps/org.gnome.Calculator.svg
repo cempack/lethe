@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+<defs>
+  <linearGradient id="b" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#404046"/><stop offset="1" stop-color="#18181b"/></linearGradient>
+  <linearGradient id="r" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity="0.2"/><stop offset="0.5" stop-color="#fff" stop-opacity="0.03"/><stop offset="1" stop-color="#000" stop-opacity="0.18"/></linearGradient>
+  <filter id="s" x="-10%" y="-10%" width="120%" height="130%"><feDropShadow dx="0" dy="2" stdDeviation="2.2" flood-color="#000" flood-opacity="0.35"/></filter>
+</defs>
+<g filter="url(#s)"><rect x="8" y="8" width="112" height="112" rx="26" fill="url(#b)"/></g>
+<rect x="8.5" y="8.5" width="111" height="111" rx="25.5" fill="none" stroke="url(#r)"/>
+<rect x="34" y="34" width="16" height="16" rx="8" fill="#fff" opacity="0.85"/><rect x="56" y="34" width="16" height="16" rx="8" fill="#fff" opacity="0.85"/><rect x="78" y="34" width="16" height="16" rx="8" fill="#ff9f0a" opacity="1"/><rect x="34" y="56" width="16" height="16" rx="8" fill="#fff" opacity="0.85"/><rect x="56" y="56" width="16" height="16" rx="8" fill="#fff" opacity="0.85"/><rect x="78" y="56" width="16" height="16" rx="8" fill="#ff9f0a" opacity="1"/><rect x="34" y="78" width="16" height="16" rx="8" fill="#fff" opacity="0.85"/><rect x="56" y="78" width="16" height="16" rx="8" fill="#fff" opacity="0.85"/><rect x="78" y="78" width="16" height="16" rx="8" fill="#ff9f0a" opacity="1"/>
+</svg>

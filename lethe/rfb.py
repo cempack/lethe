@@ -6,7 +6,7 @@ Control  sends keyboard and pointer events over QMP.
 
 Both peers are treated as hostile: every size is bounds-checked before use.
 """
-import json, socket, struct, threading, time
+import json, os, socket, struct, sys, threading, time
 
 from .keys import UNICODE_START, US, keystrokes
 
@@ -205,8 +205,9 @@ class Control:
 
     def _drain(self):
         try:
-            while self.sock.recv(65536):
-                pass                                             # replies are never interpreted
+            while data := self.sock.recv(65536):
+                if b'"error"' in data and os.environ.get("LETHE_DEBUG"):
+                    print("lethe: qmp", data.decode(errors="replace").strip()[:300], file=sys.stderr, flush=True)
         except OSError:
             pass
 
@@ -263,6 +264,13 @@ class Control:
         with self.lock:
             self.sock.sendmsg([msg], [(socket.SOL_SOCKET, socket.SCM_RIGHTS, struct.pack("i", fd))])
         self._send({"execute": "add_client", "arguments": {"protocol": "@dbus-display", "fdname": "lethe-display"}})
+
+    def insert(self, device, path):
+        """Put a (read-only) disc image into a virtual drive, replacing what was there. The old disc
+        is pulled out first even if Tails still holds the drive closed."""
+        self._send({"execute": "eject", "arguments": {"id": device, "force": True}})
+        self._send({"execute": "blockdev-change-medium",
+                    "arguments": {"id": device, "filename": path, "format": "raw", "read-only-mode": "read-only"}})
 
     def eject(self, device):
         """Pull a virtual disc out of the VM."""

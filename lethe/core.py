@@ -15,7 +15,7 @@ Layers, outside in:
   5. Display     QEMU never touches the desktop. It exposes raw pixels on a
                  private socket; the Lethe window draws them and feeds input back.
 """
-import fcntl, hashlib, json, os, re, resource, shutil, signal, socket, struct, subprocess, sys, threading, time
+import fcntl, hashlib, io, json, os, re, resource, shutil, signal, socket, struct, subprocess, sys, tarfile, threading, time
 
 APP = "lethe"
 DATA = os.path.join(os.environ.get("XDG_DATA_HOME") or os.path.expanduser("~/.local/share"), APP)
@@ -31,7 +31,8 @@ TAILS_FPR = "A490D0F4D311A4153E2BB7CADBB802B258ACD84F"
 CURL = ["curl", "--proto", "=https", "--proto-redir", "=https", "--tlsv1.2", "-fL", "--retry", "3"]
 # cpus 0 = automatic: half the cores, at most 4
 DEFAULTS = {"ram_mb": 4096, "cpus": 0, "width": 1920, "height": 1080, "skip_welcome": True,
-            "harden_guest": True, "auto_tor": True, "vpn": False, "sentinel": True}
+            "harden_guest": True, "auto_tor": True, "vpn": False, "sentinel": True,
+            "clipboard": True}
 
 
 class LetheError(Exception):
@@ -160,6 +161,23 @@ def update(progress=lambda text, fraction: None):
 
 
 # ── Config disc: a tiny read-only ISO 9660 image handed to the guest ─────────
+
+def _tar(folder):
+    """A folder as an uncompressed tar, with no owner, dates or modes from this computer."""
+    out = io.BytesIO()
+    with tarfile.open(fileobj=out, mode="w", format=tarfile.USTAR_FORMAT) as tar:
+        for root, dirs, files in os.walk(folder):
+            dirs.sort()
+            for name in sorted(dirs) + sorted(files):
+                path = os.path.join(root, name)
+                info = tar.gettarinfo(path, os.path.relpath(path, folder))
+                info.uid = info.gid = 0
+                info.uname = info.gname = ""
+                info.mtime, info.mode = 0, 0o755 if info.isdir() else 0o644
+                with open(path, "rb") if info.isfile() else io.BytesIO() as f:
+                    tar.addfile(info, f if info.isfile() else None)
+    return out.getvalue()
+
 
 def build_iso(label, files):
     """Minimal single-directory ISO 9660 image. `files` maps 8.3 NAMES to bytes."""
@@ -297,6 +315,7 @@ class Session:
         self.vm = self.ram_fd = None
         self.kvm, self.virtio, self.dbus = True, False, False
         self.helpers, self.why, self.started = [], None, None
+        self.clipboard, self.clips = False, 0
         self.vnc_path, self.qmp_path = os.path.join(RT, "q", "vnc.sock"), os.path.join(RT, "q", "qmp.sock")
 
     def start(self):
@@ -371,12 +390,24 @@ class Session:
             disc = os.path.join(RT, "config.iso")
             files = {"SETUP.SH": "guest/setup.sh", "GTK4.CSS": "guest/gtk4.css", "GTK3.CSS": "guest/gtk3.css",
                      "WALL.PNG": "assets/wallpaper.png",
-                     "ONLINE.PNG": "assets/wallpaper-online.png", "INTER.TTF": "assets/Inter.ttf"}
+                     "ONLINE.PNG": "assets/wallpaper-online.png", "INTER.TTF": "assets/Inter.ttf",
+                     "EXT.JS": "guest/extension/extension.js", "EXT.CSS": "guest/extension/stylesheet.css",
+                     "EXT.JSN": "guest/extension/metadata.json", "MARK.SVG": "guest/extension/mark.svg"}
+            data = {n: open(os.path.join(LIB, p), "rb").read() for n, p in files.items()
+                    if os.path.exists(os.path.join(LIB, p))}
+            data["ICONS.TAR"] = _tar(os.path.join(LIB, "guest", "icons"))
+            # The host's display scale, so text in Tails comes out the size you are used to.
+            data["SCALE.TXT"] = f"{max(1.0, min(3.0, float(cfg.get('scale', 1)))):.2f}\n".encode()
             with open(disc, "wb") as f:
-                f.write(build_iso("LETHE", {n: open(os.path.join(LIB, p), "rb").read() for n, p in files.items()}))
+                f.write(build_iso("LETHE", data))
             bwrap += ["--ro-bind", disc, "/config.iso"]
             drives += ["-drive", "if=none,id=cfg,media=cdrom,readonly=on,format=raw,file=/config.iso",
                        "-device", "ide-cd,drive=cfg,bus=ide.1,id=cfgdisc"]
+            # An empty drive for the one-way clipboard: Lethe inserts a small read-only disc into it
+            # with what you copied on your computer, and the Lethe shell extension reads it.
+            drives += ["-drive", "if=none,id=clip,media=cdrom,readonly=on",
+                       "-device", "ide-cd,drive=clip,bus=ide.2,id=clipdisc"]
+            self.clipboard = True
 
         self.stage("network")
         net, vpn = self._network()
@@ -478,6 +509,22 @@ class Session:
 
         threading.Thread(target=watch, daemon=True).start()
         return [holder, watcher]
+
+    def clip_disc(self, mime, data):
+        """Write the next clipboard disc; returns its path as QEMU sees it. Only one exists at a time:
+        the previous one is overwritten with zeros, then removed."""
+        self.clips += 1
+        for old in os.listdir(os.path.join(RT, "q")):
+            if old.startswith("clip-"):
+                path = os.path.join(RT, "q", old)
+                with open(path, "r+b") as f:
+                    f.write(bytes(os.fstat(f.fileno()).st_size))
+                os.remove(path)
+        name = f"clip-{self.clips}.iso"
+        fd = os.open(os.path.join(RT, "q", name), os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        with os.fdopen(fd, "wb") as f:
+            f.write(build_iso(f"LETHECLIP-{self.clips}", {"MIME.TXT": mime.encode(), "DATA.BIN": data}))
+        return f"/run/q/{name}"
 
     def alive(self):
         return self.vm is not None and self.vm.poll() is None

@@ -86,7 +86,8 @@ say "Installing Lethe (root-owned, so programs running as you cannot alter it)"
 $SUDO rm -rf "$LIB"
 $SUDO install -d -o root -g root -m 0755 "$LIB/lethe" "$LIB/guest" "$LIB/assets"
 $SUDO install -o root -g root -m 0644 "$here"/lethe/*.py "$LIB/lethe/"
-$SUDO install -o root -g root -m 0644 "$here"/guest/* "$LIB/guest/"
+$SUDO cp -r --no-preserve=all "$here"/guest/. "$LIB/guest/"
+$SUDO chown -R root:root "$LIB/guest" && $SUDO chmod -R u=rwX,go=rX "$LIB/guest"
 $SUDO install -o root -g root -m 0644 "$here"/assets/lethe.svg "$here"/assets/lethe.css \
   "$here"/assets/wallpaper.png "$here"/assets/wallpaper-online.png \
   "$here"/assets/Inter.ttf "$here"/assets/Inter-LICENSE.txt "$LIB/assets/"

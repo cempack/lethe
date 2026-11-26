@@ -1,0 +1,6 @@
+{
+  "uuid": "lethe@lethe",
+  "name": "Lethe",
+  "description": "The Lethe desktop: dock, top bar and the receiving end of Lethe's one-way clipboard.",
+  "shell-version": ["46", "47", "48", "49", "50"]
+}

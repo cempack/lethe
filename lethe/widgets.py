@@ -150,6 +150,22 @@ def check_row(check, icon=None):
     return r
 
 
+def tile(check):
+    """A protection layer as a small card: icon and status on top, name and value below.
+    Its explanation is the tooltip; the window spells out the ones that need attention."""
+    t = box(spacing=0, css="tile", tooltip_text=check.detail)
+    top = box(False, 0)
+    top.append(image(check.key, 20))
+    top.append(Gtk.Box(hexpand=True))
+    top.append(dot(check.state))
+    t.append(top)
+    for text, css, gap in ((check.title, "headline", 14), (check.value or "", "caption", 2)):
+        line = label(text, css)
+        line.set_ellipsize(Pango.EllipsizeMode.END)     # a tile never forces the window wider
+        t.append(margins(line, top=gap))
+    return t
+
+
 def setting_row(title, detail, control):
     r = box(False, 18, css="row")
     text = box(spacing=4, hexpand=True, valign=Gtk.Align.CENTER)
@@ -277,21 +293,33 @@ class Display(Gtk.Widget):
             tex = Gdk.MemoryTexture.new(w, h, Gdk.MemoryFormat.B8G8R8A8_PREMULTIPLIED, GLib.Bytes.new(image_bytes), w * 4)
             self.set_cursor(Gdk.Cursor.new_from_texture(tex, hot_x, hot_y, self.hidden))
 
+    def device_scale(self):
+        """Screen pixels per GTK unit: 1.25 on a screen scaled to 125%, 2 on a 200% one."""
+        surface = self.get_native() and self.get_native().get_surface()
+        if surface and hasattr(surface, "get_scale"):                 # fractional, GTK 4.12+
+            return surface.get_scale() or 1.0
+        return float(self.get_scale_factor() or 1)
+
     def _rect(self):
-        """Where the guest screen sits: pixel for pixel when it fits, else scaled to fit; always centred."""
+        """Where the guest screen sits, in GTK units: one guest pixel per screen pixel when it fits
+        (Tails runs at the screen's real resolution), else scaled to fit; always centred."""
+        s = self.device_scale()
         w, h = self.get_width(), self.get_height()
         tw, th = self.texture.get_width(), self.texture.get_height()
-        scale = 1.0 if tw <= w and th <= h and (w - tw < 8 and h - th < 8) else min(w / tw, h / th)
+        exact = tw / s <= w + 0.5 and th / s <= h + 0.5 and w - tw / s < 8 and h - th / s < 8
+        scale = 1 / s if exact else min(w / tw, h / th)
         dw, dh = tw * scale, th * scale
-        return round((w - dw) / 2), round((h - dh) / 2), dw, dh
+        snap = lambda v: round(v * s) / s                             # on the screen's pixel grid
+        return snap((w - dw) / 2), snap((h - dh) / 2), dw, dh
 
     def do_snapshot(self, snap):
         if not self.texture:
             return
         x, y, w, h = self._rect()
         rect = Graphene.Rect().init(x, y, w, h)
-        if w == self.texture.get_width() and h == self.texture.get_height():
-            snap.append_texture(self.texture, rect)                   # 1:1, no filtering at all
+        s = self.device_scale()
+        if abs(w * s - self.texture.get_width()) < 0.01 and abs(h * s - self.texture.get_height()) < 0.01:
+            snap.append_texture(self.texture, rect)                   # 1:1 on the screen, no filtering at all
         elif hasattr(snap, "append_scaled_texture"):
             snap.append_scaled_texture(self.texture, Gsk.ScalingFilter.LINEAR, rect)
         else:
@@ -300,7 +328,7 @@ class Display(Gtk.Widget):
     def _key(self, _ctl, keyval, keycode, state, down):
         both = Gdk.ModifierType.CONTROL_MASK | Gdk.ModifierType.ALT_MASK
         if down and keyval in (Gdk.KEY_v, Gdk.KEY_V) and state & both == both:
-            self.on_paste()                                  # Ctrl+Alt+V: paste from this computer
+            self.on_paste()                                  # Ctrl+Alt+V: type this computer's text
             return True
         if self.control:
             name = Gdk.keyval_name(keyval) or ""
