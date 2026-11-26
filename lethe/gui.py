@@ -4,7 +4,7 @@ Pages are widget trees built once; `refresh` and the session thread only change
 their contents. Everything that touches GTK runs on the main thread: worker
 threads hand results over with `ui(...)`.
 """
-import os, subprocess, sys, threading, time
+import os, subprocess, sys, threading, time, types
 
 from .widgets import (Column, Display, Gtk, GLib, Meter, Pango, box, button, check_row, clear, dot, icon_button,
                       image, label, log, margins, panel, set_state, setting_row, setup_style, ui, NEEDS_ALPHA)
@@ -13,7 +13,7 @@ from . import core, dbusdisplay, pilot, rfb, sentinel
 APP_ID = "org.lethe.App"
 INSTALLED = os.path.exists("/etc/systemd/system/lethe-vpn.service")
 WIDE = 940         # from this width up, the home page sets the hero and the protection panel side by side
-BAR = 44           # height of the session bar
+BAR = 40           # height of the session bar
 
 # The dock: (icon, name, Tails desktop entry). None opens GNOME's app overview.
 DOCK = [("app-browser", "Tor Browser", "org.boum.tails.TorBrowser"), ("app-files", "Files", "org.gnome.Nautilus"),
@@ -404,19 +404,39 @@ class Window(Gtk.ApplicationWindow):
     # ── live session ────────────────────────────────────────────────────────
     def _live(self):
         page = box()
-        bar = box(False, 12, css="bar", height_request=BAR)
-        bar.append(image("lethe", 18))
-        self.clock = label("00:00", "mono")
-        bar.append(self.clock)
-        bar.append(Gtk.Box(hexpand=True))
+        # A window title bar, macOS style: identity on the left, one status capsule truly centred,
+        # tools and the one destructive action on the right.
+        bar = Gtk.CenterBox(css_classes=["bar"], height_request=BAR)
+        start = box(False, 8, valign=Gtk.Align.CENTER)
+        start.append(image("lethe", 16))
+        start.append(label("Lethe", "bar-title"))
+        start.append(label("·", "bar-faint"))
+        self.clock = label("00:00", "bar-clock")
+        self.clock.set_tooltip_text("Time in this session")
+        start.append(self.clock)
+        bar.set_start_widget(start)
+
+        self.capsule = box(False, 0, css="capsule", valign=Gtk.Align.CENTER)
         self.state_dot = dot("ok")
-        bar.append(self.state_dot)
-        self.state = label("", "caption")
-        self.state.set_ellipsize(Pango.EllipsizeMode.END)
-        bar.append(self.state)
-        bar.append(margins(icon_button("paste", "Paste from your computer (Ctrl+Alt+V)", self.paste), start=6))
-        bar.append(icon_button("fullscreen", "Full Screen", self._toggle_fullscreen))
-        bar.append(button("End Session", "end", lambda: self.destroy_session("You ended the session")))
+        self.capsule.append(margins(self.state_dot, end=9))
+        self.bar_facts = {}
+        for i, (key, icon) in enumerate((("net", "isolation"), ("tor", "network"), ("sentinel", "sentinel"))):
+            if i:
+                self.capsule.append(Gtk.Separator(orientation=Gtk.Orientation.VERTICAL))
+            item = box(False, 6, css="fact")
+            item.append(image(icon, 14))
+            text = label("", "fact-text")
+            text.set_ellipsize(Pango.EllipsizeMode.END)
+            item.append(text)
+            self.capsule.append(item)
+            self.bar_facts[key] = (item, text)
+        bar.set_center_widget(self.capsule)
+
+        end = box(False, 4, valign=Gtk.Align.CENTER)
+        end.append(icon_button("paste", "Paste from your computer (Ctrl+Alt+V)", self.paste))
+        end.append(icon_button("fullscreen", "Full Screen", self._toggle_fullscreen))
+        end.append(margins(button("End Session", "end", lambda: self.destroy_session("You ended the session")), start=8))
+        bar.set_end_widget(end)
         page.append(bar)
         self.alert = Gtk.Revealer(transition_type=Gtk.RevealerTransitionType.SLIDE_DOWN)
         self.alert_text = label("", "banner", wrap=True, chars=80)
@@ -535,14 +555,19 @@ class Window(Gtk.ApplicationWindow):
     def _go_live(self, vpn, manual, autopilot):
         log("live", "manual" if manual else "auto", "tor=" + str(autopilot and autopilot.online))
         firewalled = vpn or os.path.exists(core.NET_SOCK)
-        parts = [f"VPN · {core.vpn_profile()}" if vpn else ("Firewalled" if firewalled else "Not firewalled")]
-        if autopilot and autopilot.online:
-            parts.append("Tor connected")
-        parts.append("Sentinel armed" if self.cfg["sentinel"] else "Sentinel off")
-        if not core.has_kvm():
-            parts.append("Software emulation")
-        self.state.set_label("     ".join(parts))
-        set_state(self.state_dot, "ok" if firewalled and self.cfg["sentinel"] else "warn")
+        tor = bool(autopilot and autopilot.online)
+        self._fact("net", firewalled, f"VPN · {core.vpn_profile()}" if vpn else ("Firewall" if firewalled else "No firewall"),
+                   "All traffic leaves through the WireGuard tunnel" if vpn else
+                   "Tails can reach the internet and nothing else on your network" if firewalled else
+                   "Run the installer to put the session behind Lethe's firewall")
+        self._fact("tor", tor, "Tor" if tor else "Tor offline",
+                   "Tor is connected" if tor else "Connect from the Tor Connection window in Tails")
+        self._fact("sentinel", self.cfg["sentinel"], "Sentinel" if self.cfg["sentinel"] else "Sentinel off",
+                   "Watching your computer: the session is destroyed at the first sign of tampering"
+                   if self.cfg["sentinel"] else "Turned off in Preferences")
+        good = firewalled and self.cfg["sentinel"]
+        set_state(self.state_dot, "ok" if good else "warn")
+        self.capsule.set_tooltip_text(None if core.has_kvm() else "Running without hardware acceleration: slower")
         if manual:
             self._warn("The Welcome Screen could not be passed automatically. Continue by hand: "
                        "press Start Tails if you see it.")
@@ -553,6 +578,12 @@ class Window(Gtk.ApplicationWindow):
         self.show("live")
         self.display.grab_focus()
         self._dock_show(seconds=4)                        # say hello, then get out of the way
+
+    def _fact(self, key, on, text, tooltip):
+        item, label_ = self.bar_facts[key]
+        label_.set_label(text)
+        item.set_tooltip_text(tooltip)
+        (item.remove_css_class if on else item.add_css_class)("off")
 
     def _warn(self, text):
         self.alert_text.set_label(text)
@@ -693,7 +724,7 @@ class Window(Gtk.ApplicationWindow):
             self._ended("You ended the session", 4 << 30, 754, False, False)
         elif page == "live":
             self.dock.set_transition_type(Gtk.RevealerTransitionType.NONE)
-            self._go_live(False, False, None)
+            self._go_live(False, False, types.SimpleNamespace(online=True, connect=True, hardened=True))
         self.stack.set_visible_child_name(page)
 
 
