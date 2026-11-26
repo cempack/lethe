@@ -1,0 +1,14 @@
+/* Lethe palette for older GTK 3 apps inside Tails (Adwaita-dark base). */
+@define-color theme_bg_color #1c1c1e;
+@define-color theme_base_color #161618;
+@define-color theme_fg_color #f5f5f7;
+@define-color theme_text_color #f5f5f7;
+@define-color theme_selected_bg_color #5b7db1;
+@define-color theme_selected_fg_color #ffffff;
+window.background, .background, dialog, messagedialog { background-color: #1c1c1e; color: #f5f5f7; }
+headerbar, .titlebar { background: #232325; border-color: rgba(255, 255, 255, 0.06); box-shadow: none; }
+*:selected, row:selected, selection { background-color: #5b7db1; color: #ffffff; }
+button.suggested-action { background-image: none; background-color: #5b7db1; color: #ffffff; border-color: #4a6a9c; text-shadow: none; }
+switch:checked, progressbar progress, scale highlight { background-color: #5b7db1; border-color: #4a6a9c; }
+check:checked, radio:checked { background-image: none; background-color: #5b7db1; color: #ffffff; border-color: #4a6a9c; }
+link, *:link { color: #a9bedf; }
