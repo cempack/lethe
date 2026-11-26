@@ -8,12 +8,19 @@ import os, subprocess, sys, threading, time
 
 from .widgets import (Column, Display, Gtk, GLib, Meter, Pango, box, button, check_row, clear, dot, icon_button,
                       image, label, log, margins, panel, set_state, setting_row, setup_style, ui, NEEDS_ALPHA)
-from . import core, pilot, rfb, sentinel
+from . import core, dbusdisplay, pilot, rfb, sentinel
 
 APP_ID = "org.lethe.App"
 INSTALLED = os.path.exists("/etc/systemd/system/lethe-vpn.service")
 WIDE = 940         # from this width up, the home page sets the hero and the protection panel side by side
 BAR = 44           # height of the session bar
+
+# The dock: (icon, name, Tails desktop entry). None opens GNOME's app overview.
+DOCK = [("app-browser", "Tor Browser", "org.boum.tails.TorBrowser"), ("app-files", "Files", "org.gnome.Nautilus"),
+        ("app-editor", "Text Editor", "org.gnome.TextEditor"), ("app-secrets", "Secrets", "org.gnome.World.Secrets"),
+        ("app-mail", "Thunderbird", "thunderbird"), ("app-terminal", "Terminal", "org.gnome.Console"),
+        None, ("app-grid", "All Apps", None)]
+PASTE_LIMIT = 2000
 
 STEPS = [("update", "Fetching the latest Tails"), ("integrity", "Verifying the Tails signature"),
          ("sandbox", "Building the sandbox"), ("network", "Opening the protected network"),
@@ -325,6 +332,21 @@ class Window(Gtk.ApplicationWindow):
         cfg = {**self.cfg, "width": self.vm_size[0], "height": self.vm_size[1]}
         threading.Thread(target=self._run, args=(cfg, outdated), daemon=True).start()
 
+    def _open_screen(self):
+        """The VM's picture: D-Bus with shared memory when QEMU offers it (frames as fast as Tails
+        draws them), VNC otherwise (about 33 frames per second)."""
+        if self.session.dbus:
+            screen = dbusdisplay.Screen(self.control, self.session.keyring, fill_alpha=NEEDS_ALPHA)
+            screen.start()
+            if screen.ready.wait(20) and not screen.failed:
+                log("display", "dbus", "shared memory" if screen.stride and screen.buffer is not None else "")
+                return screen
+            raise core.LetheError(f"The VM's display did not connect ({screen.failed or 'timed out'}).")
+        screen = rfb.Screen(self.session.vnc_path, fill_alpha=NEEDS_ALPHA)
+        screen.start()
+        log("display", "vnc")
+        return screen
+
     @staticmethod
     def _fit(w, h):
         """A resolution for the VM: the display area, even-sized and within sane bounds."""
@@ -342,9 +364,8 @@ class Window(Gtk.ApplicationWindow):
                         raise                              # offline with an older image: carry on with it
             self.session = core.Session(cfg, stage=lambda name: ui(self.step, name))
             vpn = self.session.start()
-            self.screen = rfb.Screen(self.session.vnc_path, fill_alpha=NEEDS_ALPHA)
-            self.screen.start()
             self.control = rfb.Control(self.session.qmp_path)
+            self.screen = self._open_screen()
             if cfg["sentinel"]:
                 self.watch = sentinel.Sentinel(self.session.vm.pid, self._alarm)
                 self.watch.start()
@@ -393,7 +414,8 @@ class Window(Gtk.ApplicationWindow):
         self.state = label("", "caption")
         self.state.set_ellipsize(Pango.EllipsizeMode.END)
         bar.append(self.state)
-        bar.append(margins(icon_button("fullscreen", "Full Screen", self._toggle_fullscreen), start=6))
+        bar.append(margins(icon_button("paste", "Paste from your computer (Ctrl+Alt+V)", self.paste), start=6))
+        bar.append(icon_button("fullscreen", "Full Screen", self._toggle_fullscreen))
         bar.append(button("End Session", "end", lambda: self.destroy_session("You ended the session")))
         page.append(bar)
         self.alert = Gtk.Revealer(transition_type=Gtk.RevealerTransitionType.SLIDE_DOWN)
@@ -401,7 +423,13 @@ class Window(Gtk.ApplicationWindow):
         self.alert.set_child(self.alert_text)
         page.append(self.alert)
         self.display = Display()
+        self.display.on_paste = self.paste
         overlay = Gtk.Overlay(child=self.display, vexpand=True)
+        overlay.add_overlay(self._dock())
+        motion = Gtk.EventControllerMotion(propagation_phase=Gtk.PropagationPhase.CAPTURE)
+        motion.connect("motion", lambda _c, _x, y: self._dock_follow(overlay, y))
+        motion.connect("leave", lambda *_: self._dock_hide_later())
+        overlay.add_controller(motion)
         self.curtain = box(css="curtain", visible=False)
         inner = box(spacing=8, valign=Gtk.Align.CENTER, vexpand=True)
         inner.append(image("lethe", 48))
@@ -411,6 +439,95 @@ class Window(Gtk.ApplicationWindow):
         overlay.add_overlay(self.curtain)
         page.append(overlay)
         return page
+
+    # ── dock and paste ──────────────────────────────────────────────────────
+    def _dock(self):
+        self.dock = Gtk.Revealer(transition_type=Gtk.RevealerTransitionType.SLIDE_UP, transition_duration=220,
+                                 halign=Gtk.Align.CENTER, valign=Gtk.Align.END, margin_bottom=10)
+        row = box(False, 6, css="dock")
+        for item in DOCK:
+            if item is None:
+                row.append(Gtk.Separator(orientation=Gtk.Orientation.VERTICAL))
+                continue
+            icon, name, entry = item
+            tile = Gtk.Button(child=image(icon, 26), tooltip_text=name, focusable=False)
+            tile.add_css_class("app")
+            tile.connect("clicked", lambda _b, e=entry: self.open_app(e))
+            row.append(tile)
+        self.dock.set_child(row)
+        self.dock_hide_id = 0
+        return self.dock
+
+    def _dock_follow(self, overlay, y):
+        """Like an auto-hiding macOS dock: appear at the bottom edge, go away when the pointer leaves."""
+        height = overlay.get_height()
+        if y >= height - 3:
+            self._dock_show()
+        elif self.dock.get_reveal_child() and y < height - 96:
+            self._dock_hide_later()
+
+    def _dock_show(self, seconds=0):
+        if self.dock_hide_id:
+            GLib.source_remove(self.dock_hide_id)
+            self.dock_hide_id = 0
+        self.dock.set_reveal_child(True)
+        if seconds:
+            self.dock_hide_id = GLib.timeout_add_seconds(seconds, self._dock_hide)
+
+    def _dock_hide_later(self):
+        if self.dock.get_reveal_child() and not self.dock_hide_id:
+            self.dock_hide_id = GLib.timeout_add(450, self._dock_hide)
+
+    def _dock_hide(self):
+        self.dock_hide_id = 0
+        self.dock.set_reveal_child(False)
+        return False
+
+    def open_app(self, entry):
+        """Open a Tails app the way a person would: the Run prompt (Alt+F2) and its desktop entry."""
+        control, translator = self.control, self.display.translator
+        if not control:
+            return
+        self._dock_hide()
+        self.display.grab_focus()
+
+        def work():
+            control.keys(translator.release_all())
+            if entry is None:
+                control.tap("meta_l")                    # GNOME's overview: every app, with search
+                return
+            control.tap("alt", "f2")
+            time.sleep(0.8)
+            control.type(f"gio launch /usr/share/applications/{entry}.desktop", 0.004)
+            time.sleep(0.15)
+            control.tap("ret")
+
+        threading.Thread(target=work, daemon=True).start()
+
+    def paste(self):
+        """Type the text on this computer's clipboard into Tails. One way only: nothing comes back out."""
+        if self.control:
+            self.get_clipboard().read_text_async(None, self._pasted)
+
+    def _pasted(self, clipboard, result):
+        try:
+            text = clipboard.read_text_finish(result)
+        except GLib.Error:
+            text = None
+        text = (text or "").replace("\r\n", "\n").rstrip("\n")
+        if not text:
+            return self._warn("There is no text on your computer's clipboard to paste.")
+        if len(text) > PASTE_LIMIT:
+            text = text[:PASTE_LIMIT]
+            self._warn(f"Only the first {PASTE_LIMIT} characters were pasted.")
+        control, session, translator = self.control, self.session, self.display.translator
+        self.display.grab_focus()
+
+        def work():
+            control.keys(translator.release_all())       # Ctrl and Alt are still held from the shortcut
+            control.type(text, 0.006, stop=lambda: self.control is not control or not (session and session.alive()))
+
+        threading.Thread(target=work, daemon=True).start()
 
     def _toggle_fullscreen(self):
         self.unfullscreen() if self.is_fullscreen() else self.fullscreen()
@@ -435,6 +552,7 @@ class Window(Gtk.ApplicationWindow):
         self.display.control = self.control
         self.show("live")
         self.display.grab_focus()
+        self._dock_show(seconds=4)                        # say hello, then get out of the way
 
     def _warn(self, text):
         self.alert_text.set_label(text)
@@ -574,6 +692,7 @@ class Window(Gtk.ApplicationWindow):
             self._ending()
             self._ended("You ended the session", 4 << 30, 754, False, False)
         elif page == "live":
+            self.dock.set_transition_type(Gtk.RevealerTransitionType.NONE)
             self._go_live(False, False, None)
         self.stack.set_visible_child_name(page)
 

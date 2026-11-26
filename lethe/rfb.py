@@ -8,7 +8,7 @@ Both peers are treated as hostile: every size is bounds-checked before use.
 """
 import json, socket, struct, threading, time
 
-from .keys import typed
+from .keys import UNICODE_START, US, keystrokes
 
 MAX_SIDE = 8192
 
@@ -229,11 +229,24 @@ class Control:
     def tap(self, *qcodes):
         self.keys([(q, True) for q in qcodes] + [(q, False) for q in reversed(qcodes)])
 
-    def type(self, text, delay=0.012):
-        """Type text at a human-plausible pace: the emulated keyboard has a small buffer."""
-        for ch in text:
-            self.keys(typed(ch))
-            time.sleep(delay)
+    def type(self, text, delay=0.012, stop=lambda: False):
+        """Type any text into the guest, one character at a time; `stop()` can interrupt it."""
+        for events in keystrokes(text):
+            if stop():
+                return False
+            if events[0] == "unicode":
+                # Ctrl+Shift+U, the code, Space. The guest's input method commits it asynchronously:
+                # give it time on both sides, or neighbouring keys are lost or reordered.
+                self.keys(UNICODE_START)
+                time.sleep(0.05)
+                self.keys([(US[d][0], down) for d in events[1] for down in (True, False)])
+                time.sleep(0.03)
+                self.keys([("spc", True), ("spc", False)])
+                time.sleep(0.12)
+            else:
+                self.keys(events)
+                time.sleep(delay)
+        return True
 
     def move(self, fx, fy):
         """Pointer position as fractions 0..1 of the guest screen."""
@@ -243,6 +256,13 @@ class Control:
 
     def button(self, name, down):
         self._events([{"type": "btn", "data": {"down": bool(down), "button": name}}])
+
+    def add_display_client(self, fd):
+        """Give QEMU one end of a socket for its D-Bus display (QEMU serves, we connect)."""
+        msg = json.dumps({"execute": "getfd", "arguments": {"fdname": "lethe-display"}}).encode() + b"\n"
+        with self.lock:
+            self.sock.sendmsg([msg], [(socket.SOL_SOCKET, socket.SCM_RIGHTS, struct.pack("i", fd))])
+        self._send({"execute": "add_client", "arguments": {"protocol": "@dbus-display", "fdname": "lethe-display"}})
 
     def eject(self, device):
         """Pull a virtual disc out of the VM."""

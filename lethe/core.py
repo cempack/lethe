@@ -268,6 +268,16 @@ def fast_display():
         return False
 
 
+def dbus_display():
+    """True if QEMU can hand frames over D-Bus (immediate, shared memory) instead of VNC (30 ms polling)."""
+    try:
+        out = subprocess.run(["qemu-system-x86_64", "-display", "help"], capture_output=True, text=True, timeout=10,
+                             env={**os.environ, **({"QEMU_MODULE_DIR": MODULES} if MODULES else {})}).stdout
+        return "dbus" in out.split()
+    except (OSError, subprocess.SubprocessError):
+        return False
+
+
 def has_kvm():
     return os.access("/dev/kvm", os.R_OK | os.W_OK)
 
@@ -285,7 +295,7 @@ class Session:
     def __init__(self, cfg, stage=lambda name: None):
         self.cfg, self.stage = cfg, stage
         self.vm = self.ram_fd = None
-        self.kvm, self.virtio = True, False
+        self.kvm, self.virtio, self.dbus = True, False, False
         self.helpers, self.why, self.started = [], None, None
         self.vnc_path, self.qmp_path = os.path.join(RT, "q", "vnc.sock"), os.path.join(RT, "q", "qmp.sock")
 
@@ -327,13 +337,21 @@ class Session:
         os.set_inheritable(self.ram_fd, True)
 
         self.virtio = fast_display()
+        self.dbus = self.virtio and dbus_display()
+        # D-Bus normally identifies a peer by its process ID, which does not exist inside the
+        # sandbox's process namespace. Instead, the two sides prove themselves with a secret
+        # cookie in a folder only this session can read (and which is deleted with it).
+        self.keyring = os.path.join(RT, "q", "keyring")
+        if self.dbus:
+            os.makedirs(self.keyring, mode=0o700)
         qemu_bin = os.path.realpath(shutil.which("qemu-system-x86_64"))
         bwrap = ["bwrap", "--unshare-all", "--die-with-parent", "--new-session", "--cap-drop", "ALL", "--clearenv",
                  "--hostname", "localhost", "--uid", "1000", "--gid", "1000", "--setenv", "PATH", "/usr/bin",
                  "--proc", "/proc", "--dev", "/dev", *(["--dev-bind", "/dev/kvm", "/dev/kvm"] if self.kvm else []),
                  "--tmpfs", "/tmp", "--tmpfs", "/run", "--bind", os.path.join(RT, "q"), "/run/q",
                  "--tmpfs", "/etc", "--ro-bind", os.path.join(RT, "passwd"), "/etc/passwd",
-                 "--dir", "/usr/bin", "--ro-bind", qemu_bin, qemu_bin, "--ro-bind", iso, "/tails.iso"]
+                 "--dir", "/usr/bin", "--ro-bind", qemu_bin, qemu_bin, "--ro-bind", iso, "/tails.iso",
+                 *(["--setenv", "G_DBUS_COOKIE_SHA1_KEYRING_DIR", "/run/q/keyring"] if self.dbus else [])]
         for d in ("/usr/lib", "/usr/lib32", "/usr/lib64", "/usr/libx32", "/lib", "/lib32", "/lib64", "/libx32", "/bin"):
             if os.path.islink(d):                               # mirror the host's /usr layout
                 bwrap += ["--symlink", os.readlink(d), d]
@@ -379,7 +397,7 @@ class Session:
                 # virtio: resizable, pointer drawn by us. VGA: smallest possible device, fixed size.
                 "-device", (f"virtio-vga,xres={cfg['width']},yres={cfg['height']}" if self.virtio
                             else f"VGA,vgamem_mb=32,xres={cfg['width']},yres={cfg['height']}"),
-                "-display", "none", "-vnc", "unix:/run/q/vnc.sock",
+                *(["-display", "dbus,p2p=on"] if self.dbus else ["-display", "none", "-vnc", "unix:/run/q/vnc.sock"]),
                 "-qmp", "unix:/run/q/qmp.sock,server=on,wait=off",
                 "-serial", "none", "-parallel", "none",
                 "-sandbox", "on,obsolete=deny,elevateprivileges=deny,spawn=deny,resourcecontrol=deny"]
@@ -400,7 +418,7 @@ class Session:
         with open(os.path.join(RT, "pid"), "w") as f:
             f.write(str(self.vm.pid))
         for _ in range(100):                                    # wait for QEMU's sockets
-            if os.path.exists(self.vnc_path) and os.path.exists(self.qmp_path):
+            if os.path.exists(self.qmp_path) and (self.dbus or os.path.exists(self.vnc_path)):
                 return vpn
             if self.vm.poll() is not None:
                 err = self.vm.stderr.read().decode(errors="replace").strip().splitlines()

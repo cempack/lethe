@@ -124,3 +124,23 @@ def typed(text):
         q, shift = ("ret", False) if ch == "\n" else US[ch]
         ev += ([("shift", True)] if shift else []) + [(q, True), (q, False)] + ([("shift", False)] if shift else [])
     return ev
+
+
+def keystrokes(text):
+    """What to send for each character when typing arbitrary text (a paste) into the guest:
+    a list of key events, or ("unicode", hex) for characters a US keyboard cannot type."""
+    out = []
+    for ch in text:
+        if ch == "\n":
+            out.append([("ret", True), ("ret", False)])
+        elif ch == "\t":
+            out.append([("tab", True), ("tab", False)])
+        elif ch in US:
+            q, shift = US[ch]
+            out.append(([("shift", True)] if shift else []) + [(q, True), (q, False)] + ([("shift", False)] if shift else []))
+        elif ch.isprintable():
+            out.append(("unicode", f"{ord(ch):x}"))
+    return out
+
+
+UNICODE_START = [("ctrl", True), ("shift", True), ("u", True), ("u", False), ("shift", False), ("ctrl", False)]

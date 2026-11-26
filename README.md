@@ -15,8 +15,9 @@ lethe doctor      # audit every protection layer on this machine
 1. The Tails image is checked against the Tails signing key (fingerprint pinned in the code). This happens on download and again before every start.
 2. A sandbox is built and Tails boots inside it. No virtual disk exists.
 3. Lethe passes the Tails Welcome Screen for you (English, US keyboard, the defaults most Tails users have), applies stricter settings and the Lethe appearance, and connects to Tor automatically (can be turned off in Preferences, e.g. to use bridges). It does this by pressing keys, like a person: the image stays byte-for-byte the signed original.
-4. Your keyboard layout is translated as you type, so an AZERTY `a` is still an `a`.
-5. When the session ends, its memory is overwritten with zeros.
+4. Your keyboard layout is translated as you type, so an AZERTY `a` is still an `a`. **Ctrl+Alt+V** (or the Paste button) types your computer's clipboard into Tails. It is one way only: nothing is ever copied out of the session.
+5. A dock at the bottom edge opens Tor Browser, Files, Text Editor, Secrets, Thunderbird and Terminal.
+6. When the session ends, its memory is overwritten with zeros.
 
 ## Protection
 
@@ -27,7 +28,7 @@ lethe doctor      # audit every protection layer on this machine
 | **Network** | The VM has no network of its own. A separate relay (`passt`) carries its traffic: IPv4/TCP only, no inbound, no host DNS, fake addressing. Installed system-wide it runs as its own user behind a kernel firewall that only allows the public internet. |
 | **VPN before Tor** | Optional WireGuard profile, for the VM only. The tunnel lives in its own network namespace and is the VM's only route: if it drops, nothing leaves. Profiles are treated as data; `PostUp`-style commands are dropped. |
 | **Sandbox** | bubblewrap. The VM process sees its own binary, libraries, firmware and the image. No home folder, no D-Bus, no capabilities, seccomp filter on. |
-| **Display** | The VM never touches your desktop. It exposes pixels on a private socket; Lethe draws them and feeds input back. No clipboard, audio, USB or shared folders. |
+| **Display** | The VM never touches your desktop. QEMU shares the picture with Lethe over a private peer-to-peer D-Bus link (frames as fast as Tails draws them, shared memory, no copying), or over a private VNC socket where that is unavailable. No clipboard out of the VM, no audio, USB or shared folders. |
 | **Sentinel** | Watches the host during a session and destroys it if a debugger attaches, someone logs in remotely, or a new keyboard appears. Hides the session while the screen is being captured (Hyprland). |
 
 ## What it cannot do

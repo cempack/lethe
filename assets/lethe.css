@@ -91,5 +91,16 @@ spinner { color: #f5f5f7; }
 .banner { background: #241b0b; color: #f6c97f; padding: 9px 16px; font-size: 13px; }
 .vm, .curtain { background: #000000; }
 
+/* ── dock ───────────────────────────────────────────────────────────────── */
+.dock { background: rgba(28, 28, 31, 0.86); border: 1px solid rgba(255, 255, 255, 0.10); border-radius: 24px;
+        padding: 8px; box-shadow: 0 18px 48px rgba(0, 0, 0, 0.55), 0 1px 0 rgba(255, 255, 255, 0.04) inset; }
+.dock separator { background: rgba(255, 255, 255, 0.12); min-width: 1px; margin: 8px 4px; }
+button.app { background: linear-gradient(180deg, #3b3b40, #1e1e22); border: 1px solid rgba(255, 255, 255, 0.08);
+             border-radius: 15px; padding: 11px; box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
+             transition: transform 160ms cubic-bezier(0.2, 0.8, 0.2, 1), background 160ms ease; }
+button.app:hover { transform: translateY(-5px) scale(1.08); background: linear-gradient(180deg, #4a4a50, #26262b); }
+button.app:active { transform: translateY(-2px) scale(1.02); }
+button.app .icon { opacity: 1; }
+
 scrollbar { background: none; border: none; }
 scrollbar slider { background: rgba(255, 255, 255, 0.14); border: none; min-width: 6px; border-radius: 99px; }

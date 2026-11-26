@@ -228,6 +228,7 @@ class Display(Gtk.Widget):
         super().__init__(focusable=True, hexpand=True, vexpand=True)
         self.add_css_class("vm")
         self.texture = self.control = None
+        self.on_paste = lambda: None
         self.translator, self.scroll = keys.Translator(), 0.0
         self.hidden = Gdk.Cursor.new_from_name("none")       # until the VM hands us its pointer image
         self.set_cursor(self.hidden)
@@ -296,7 +297,11 @@ class Display(Gtk.Widget):
         else:
             snap.append_texture(self.texture, rect)
 
-    def _key(self, _ctl, keyval, keycode, _state, down):
+    def _key(self, _ctl, keyval, keycode, state, down):
+        both = Gdk.ModifierType.CONTROL_MASK | Gdk.ModifierType.ALT_MASK
+        if down and keyval in (Gdk.KEY_v, Gdk.KEY_V) and state & both == both:
+            self.on_paste()                                  # Ctrl+Alt+V: paste from this computer
+            return True
         if self.control:
             name = Gdk.keyval_name(keyval) or ""
             if down:

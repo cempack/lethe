@@ -21,7 +21,7 @@ ME="${SUDO_USER:-$(id -un)}"
 packages() {
   if command -v pacman >/dev/null; then
     $SUDO pacman -S --needed --noconfirm qemu-system-x86 qemu-hw-display-virtio-vga \
-      qemu-hw-display-virtio-gpu qemu-hw-display-virtio-gpu-pci passt bubblewrap gnupg curl python python-gobject gtk4 \
+      qemu-hw-display-virtio-gpu qemu-hw-display-virtio-gpu-pci qemu-ui-dbus passt bubblewrap gnupg curl python python-gobject gtk4 \
       glib2 libnotify wireguard-tools iproute2 polkit
   elif command -v apt-get >/dev/null; then
     $SUDO apt-get update -q
@@ -30,11 +30,11 @@ packages() {
       || die "package install failed (Ubuntu 22.04 and older have no 'passt' package; 24.04+ is required)"
   elif command -v dnf >/dev/null; then
     $SUDO dnf install -y qemu-system-x86-core qemu-device-display-virtio-vga qemu-device-display-virtio-gpu \
-      qemu-device-display-virtio-gpu-pci passt bubblewrap gnupg2 curl python3 python3-gobject gtk4 glib2 \
+      qemu-device-display-virtio-gpu-pci qemu-ui-dbus passt bubblewrap gnupg2 curl python3 python3-gobject gtk4 glib2 \
       librsvg2 wireguard-tools iproute polkit
   elif command -v zypper >/dev/null; then
     $SUDO zypper --non-interactive install qemu-x86 qemu-hw-display-virtio-vga qemu-hw-display-virtio-gpu \
-      qemu-hw-display-virtio-gpu-pci passt bubblewrap gpg2 curl python3 python3-gobject \
+      qemu-hw-display-virtio-gpu-pci qemu-ui-dbus passt bubblewrap gpg2 curl python3 python3-gobject \
       typelib-1_0-Gtk-4_0 glib2-tools wireguard-tools iproute2 polkit
   else
     die "unsupported distro: install qemu (x86), passt, bubblewrap, gnupg, curl, python3 + PyGObject + GTK 4, wireguard-tools, then re-run"

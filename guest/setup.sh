@@ -28,6 +28,8 @@ g org.gnome.desktop.interface color-scheme prefer-dark
 g org.gnome.desktop.interface gtk-theme Adwaita-dark
 g org.gnome.desktop.interface accent-color slate
 g org.gnome.desktop.interface clock-show-weekday true
+# Window buttons on the left, macOS order (restyled as coloured circles in gtk.css).
+g org.gnome.desktop.wm.preferences button-layout 'close,minimize,maximize:'
 g org.gnome.desktop.interface enable-hot-corners true
 # The VM draws without a graphics card: animations only make it feel slow.
 g org.gnome.desktop.interface enable-animations false
