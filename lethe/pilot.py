@@ -18,18 +18,20 @@ import threading, time
 TAILS_BLUE = (32, 74, 135)       # Tails desktop / greeter background
 SELECTED = bytes((228, 132, 53, 255))   # GNOME selection blue, as BGRA
 DISC = "/dev/disk/by-label/LETHE"   # mounted for the script, ejected right after
-COMMAND = f'sh -c "udisksctl mount -b {DISC}; sh /media/amnesia/LETHE/setup.sh; udisksctl unmount -b {DISC}"\n'
+COMMAND = f'sh -c "udisksctl mount -b {DISC}; sh /media/amnesia/LETHE/setup.sh; udisksctl unmount -b {DISC}"'
+EDGES = [(0.004, 0.3), (0.004, 0.55), (0.004, 0.8), (0.996, 0.3), (0.996, 0.55), (0.996, 0.8)]
 
 
 class Pilot(threading.Thread):
-    def __init__(self, screen, control, session, harden, report):
+    def __init__(self, screen, control, session, harden, connect, report):
         super().__init__(daemon=True)
-        self.screen, self.control, self.session, self.harden, self.report = screen, control, session, harden, report
-        self.hardened = False
+        self.screen, self.control, self.session, self.report = screen, control, session, report
+        self.harden, self.connect = harden, connect
+        self.hardened = self.online = False
 
     # -- reading the screen --------------------------------------------------
     def _look(self):
-        self.w, self.h, self.px, _ = self.screen.snapshot()
+        self.w, self.h, self.px = self.screen.peek()
         return self.w >= 800 and self.h >= 600      # firmware and boot menu use smaller text modes
 
     def _at(self, fx, fy):
@@ -47,6 +49,13 @@ class Pilot(threading.Thread):
         # Black top bar on both sides of the clock, Tails blue at the screen edge.
         return (self._look() and max(self._at(0.3, 0.008)) < 60 and max(self._at(0.7, 0.008)) < 60
                 and self._near(self._at(0.004, 0.5), TAILS_BLUE))
+
+    def _edge(self):
+        """Mean colour along both screen edges: only the wallpaper shows there."""
+        if not self._look():
+            return (0, 0, 0)
+        pts = [self._at(x, y) for x, y in EDGES]
+        return tuple(sum(p[i] for p in pts) / len(pts) for i in range(3))
 
     def _wait(self, test, timeout, every=0.5):
         end = time.time() + timeout
@@ -72,7 +81,28 @@ class Pilot(threading.Thread):
         if self.harden:
             self.report("hardening")
             self._harden(slow)
+        if self.connect and self.hardened:
+            self.report("tor")
+            self._connect_tor(slow)
         self.report("ready")
+
+    def _connect_tor(self, slow):
+        """Tor Connection: "Connect to Tor automatically" (Alt+A), then Connect (Alt+C).
+        Inside Tails, setup.sh swaps to an imperceptibly brighter copy of the wallpaper
+        once Tor has bootstrapped: that change is the signal. Then the window is closed."""
+        before = self._edge()
+        self.control.tap("alt", "a")
+        time.sleep(0.8 * slow)
+        self.control.tap("alt", "c")
+        self.online = self._wait(lambda: max(abs(a - b) for a, b in zip(self._edge(), before)) >= 1.5, 180 * slow, 1)
+        if self.online:
+            time.sleep(1.5 * slow)                 # let the success page draw before closing it
+            for _ in range(3):                     # the window sits in the middle: wait to see it go
+                window = self._look() and self._at(0.5, 0.5)
+                self.control.tap("alt", "f4")
+                if self._wait(lambda: not self._near(self._at(0.5, 0.5), window, 6) if self._look() else False,
+                              3 * slow, 0.3):
+                    break
 
     def _harden(self, slow):
         edge = lambda: self._look() and self._at(0.004, 0.5)
@@ -89,6 +119,11 @@ class Pilot(threading.Thread):
         time.sleep(0.4 * slow)
         dimmed = edge()
         self.control.type(COMMAND, 0.012 * slow)
+        time.sleep(0.4 * slow)
+        self.control.tap("ret")
+        # An Enter pressed while the prompt is still busy can be lost: if it is still open, press it again.
+        if not self._wait(lambda: not self._near(edge(), dimmed, 4), 4 * slow, 0.2):
+            self.control.tap("ret")
         # Success = the edge of the screen is neither Tails blue nor the dimmed prompt: our wallpaper.
         self.hardened = self._wait(
             lambda: self._desktop_bar() and not self._near(edge(), TAILS_BLUE) and not self._near(edge(), dimmed, 4),

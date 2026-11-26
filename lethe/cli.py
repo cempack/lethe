@@ -39,7 +39,7 @@ def main():
     elif cmd == "doctor":
         mark = {"ok": "\033[32m✓\033[0m", "warn": "\033[33m!\033[0m", "bad": "\033[31m✗\033[0m",
                 "warning": "\033[33m!\033[0m", "critical": "\033[31m✗\033[0m"}
-        rows = core.audit() + sentinel.preflight()
+        rows = [tuple(c) for c in core.audit()] + sentinel.preflight()
         print("Lethe protection audit\n")
         for state, title, detail in rows:
             print(f"  {mark[state]} {title + ':':<17} {detail}")

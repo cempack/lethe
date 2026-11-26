@@ -1,269 +1,36 @@
-"""The Lethe window: home, preferences, launch, the live session, and its destruction.
+"""The Lethe window: home, preferences, launch, the live session, and its end.
 
-Design: monochrome. A near-black canvas, white type set in Inter, one white pill
-for the main action, colour only where it carries meaning (a status dot). The
-content is a single centred column and a tile grid that reflows with the window.
+Pages are widget trees built once; `refresh` and the session thread only change
+their contents. Everything that touches GTK runs on the main thread: worker
+threads hand results over with `ui(...)`.
 """
-import ctypes, ctypes.util, os, subprocess, sys, threading, time
+import os, subprocess, sys, threading, time
 
-ASSETS = os.path.join(os.path.dirname(os.path.dirname(os.path.realpath(__file__))), "assets")
-try:    # make the bundled typeface available to this process only, before GTK starts
-    _fc = ctypes.CDLL(ctypes.util.find_library("fontconfig") or "libfontconfig.so.1")
-    _fc.FcConfigAppFontAddFile(None, os.path.join(ASSETS, "Inter.ttf").encode())
-except OSError:
-    pass
-
-import gi
-for _lib, _ver in (("Gtk", "4.0"), ("Gdk", "4.0"), ("Gsk", "4.0"), ("Graphene", "1.0")):
-    gi.require_version(_lib, _ver)
-from gi.repository import Gdk, GLib, Graphene, Gsk, Gtk, Pango
-
-from . import core, keys, pilot, rfb, sentinel
+from .widgets import (Column, Display, Gtk, GLib, Meter, Pango, box, button, check_row, clear, dot, icon_button,
+                      image, label, log, margins, panel, set_state, setting_row, setup_style, ui, NEEDS_ALPHA)
+from . import core, pilot, rfb, sentinel
 
 APP_ID = "org.lethe.App"
 INSTALLED = os.path.exists("/etc/systemd/system/lethe-vpn.service")
-COLUMN = 720      # widest the content column gets
-BAR = 41          # height of the session bar
-
-CSS = """
-window.lethe { background: #0a0a0b; color: #f4f4f5; font-family: Inter, "SF Pro Text", "Helvetica Neue", sans-serif; font-size: 13.5px; }
-headerbar { background: #0a0a0b; border: none; box-shadow: none; min-height: 34px; }
-.brand { font-size: 15px; font-weight: 600; letter-spacing: -0.2px; }
-.hero { font-size: 44px; font-weight: 600; letter-spacing: -1.6px; }
-.compact .hero { font-size: 30px; letter-spacing: -0.9px; }
-.title { font-size: 28px; font-weight: 600; letter-spacing: -0.8px; }
-.body { font-weight: 500; }
-.secondary { color: rgba(244,244,245,0.56); }
-.tertiary { color: rgba(244,244,245,0.36); font-size: 12.5px; }
-.micro { font-size: 10.5px; font-weight: 600; letter-spacing: 1.3px; color: rgba(244,244,245,0.44); }
-.critical { color: #f2555a; }
-.mono { font-family: "SF Mono", "JetBrains Mono", "DejaVu Sans Mono", monospace; font-feature-settings: "tnum"; font-size: 12.5px; }
-
-.tile { background: rgba(255,255,255,0.035); border: 1px solid rgba(255,255,255,0.08); border-radius: 14px; padding: 14px 16px; }
-flowbox, flowboxchild { background: none; padding: 0; border: none; outline: none; }
-.line { padding: 15px 2px; border-bottom: 1px solid rgba(255,255,255,0.08); }
-.rule { border-bottom: 1px solid rgba(255,255,255,0.08); }
-
-.dot { min-width: 7px; min-height: 7px; border-radius: 99px; }
-.dot.ok { background: #3ecf8e; }
-.dot.warn { background: #f5a524; }
-.dot.bad { background: #f2555a; }
-.dot.idle { background: rgba(255,255,255,0.24); }
-
-button { background-image: none; box-shadow: none; text-shadow: none; border: none; transition: all 140ms ease; }
-button.primary { background: #f4f4f5; color: #0a0a0b; font-weight: 600; font-size: 14.5px; border-radius: 999px; padding: 12px 30px; }
-button.primary:hover { background: #ffffff; }
-button.primary:active { background: #d4d4d8; }
-button.primary:disabled { background: rgba(255,255,255,0.08); color: rgba(244,244,245,0.30); }
-button.outline { background: none; color: #f4f4f5; font-weight: 500; font-size: 13px; border-radius: 999px; padding: 6px 15px;
-                 border: 1px solid rgba(255,255,255,0.16); }
-button.outline:hover { background: rgba(255,255,255,0.07); border-color: rgba(255,255,255,0.28); }
-button.outline.end:hover { background: #e5484d; border-color: #e5484d; color: #ffffff; }
-button.symbol { background: none; color: rgba(244,244,245,0.56); border-radius: 999px; padding: 7px; }
-button.symbol:hover { background: rgba(255,255,255,0.08); color: #ffffff; }
-
-switch { min-width: 40px; min-height: 22px; border-radius: 999px; background: rgba(255,255,255,0.14); border: none; padding: 2px; }
-switch:checked { background: #f4f4f5; }
-switch slider { min-width: 18px; min-height: 18px; border-radius: 999px; background: #f4f4f5; border: none; box-shadow: none; }
-switch:checked slider { background: #0a0a0b; }
-switch image { opacity: 0; }
-progressbar trough { background: rgba(255,255,255,0.10); border-radius: 99px; min-height: 2px; border: none; }
-progressbar progress { background: #f4f4f5; border-radius: 99px; min-height: 2px; border: none; }
-
-.bar { background: #0a0a0b; border-bottom: 1px solid rgba(255,255,255,0.08); padding: 5px 12px; }
-.banner { background: #2a1f0a; color: #f5c877; padding: 8px 14px; font-size: 12.5px; }
-.vm, .curtain { background: #000000; }
-scrollbar { background: none; border: none; }
-"""
-
-
-def label(text, css="", xalign=0.0, wrap=False):
-    w = Gtk.Label(label=text, xalign=xalign, wrap=wrap)
-    if wrap:
-        w.set_wrap_mode(Pango.WrapMode.WORD_CHAR)
-        w.set_max_width_chars(22)         # may shrink, within reason: the column decides the width
-        w.set_hexpand(True)
-        if xalign == 0.5:
-            w.set_justify(Gtk.Justification.CENTER)
-    for c in css.split():
-        w.add_css_class(c)
-    return w
-
-
-def box(vertical=True, spacing=0, css="", **props):
-    b = Gtk.Box(orientation=Gtk.Orientation.VERTICAL if vertical else Gtk.Orientation.HORIZONTAL, spacing=spacing, **props)
-    for c in css.split():
-        b.add_css_class(c)
-    return b
-
-
-def button(text, css, action):
-    b = Gtk.Button(label=text, valign=Gtk.Align.CENTER, halign=Gtk.Align.CENTER)
-    for c in css.split():
-        b.add_css_class(c)
-    b.connect("clicked", lambda *_: action())
-    return b
-
-
-def logo(size):
-    img = Gtk.Image.new_from_file(os.path.join(ASSETS, "lethe.svg"))
-    img.set_pixel_size(size)
-    img.set_halign(Gtk.Align.CENTER)
-    return img
-
-
-def dot(state):
-    d = Gtk.Box(valign=Gtk.Align.CENTER, halign=Gtk.Align.CENTER)
-    d.add_css_class("dot")
-    d.add_css_class({"critical": "bad", "warning": "warn"}.get(state, state))
-    return d
-
-
-def spaced(widget, top=0, bottom=0):
-    widget.set_margin_top(top)
-    widget.set_margin_bottom(bottom)
-    return widget
-
-
-def tile(state, name, text):
-    """One cell of the status grid: a small caps label with a status dot, and what it means."""
-    t = box(spacing=7, css="tile")
-    head = box(False, 8)
-    head.append(dot(state))
-    head.append(label(name.upper(), "micro"))
-    t.append(head)
-    t.append(label(text, "secondary", wrap=True))
-    return t
-
-
-def line(title, detail="", trailing=None):
-    """One row of preferences: title, explanation, control. Separated by a hairline."""
-    r = box(False, 16, css="line")
-    text = box(spacing=3, hexpand=True, valign=Gtk.Align.CENTER)
-    text.append(label(title, "body", wrap=True))
-    if detail:
-        text.append(label(detail, "secondary", wrap=True))
-    r.append(text)
-    if trailing:
-        trailing.set_valign(Gtk.Align.CENTER)
-        r.append(trailing)
-    return r
-
-
-def clear(container):
-    while container.get_first_child():
-        container.remove(container.get_first_child())
-
-
-def log(*what):
-    if os.environ.get("LETHE_DEBUG"):
-        print("lethe:", *what, file=sys.stderr, flush=True)
-
-
-def ui(fn, *args):
-    """Run `fn` on the GTK thread."""
-    GLib.idle_add(lambda: fn(*args) and False)
-
-
-class Display(Gtk.Widget):
-    """Draws the VM's screen and turns local input into guest input."""
-
-    def __init__(self):
-        super().__init__(focusable=True, hexpand=True, vexpand=True)
-        self.add_css_class("vm")
-        self.texture = self.control = None
-        self.translator, self.scroll = keys.Translator(), 0.0
-        self.hidden = Gdk.Cursor.new_from_name("none")       # until the VM hands us its pointer image
-        self.set_cursor(self.hidden)
-        k = Gtk.EventControllerKey()
-        k.connect("key-pressed", self._key, True)
-        k.connect("key-released", self._key, False)
-        m = Gtk.EventControllerMotion()
-        m.connect("motion", lambda _c, x, y: self._move(x, y))
-        c = Gtk.GestureClick(button=0)
-        c.connect("pressed", lambda g, _n, x, y: self._click(g, x, y, True))
-        c.connect("released", lambda g, _n, x, y: self._click(g, x, y, False))
-        s = Gtk.EventControllerScroll.new(Gtk.EventControllerScrollFlags.VERTICAL)
-        s.connect("scroll", self._scroll)
-        f = Gtk.EventControllerFocus()
-        f.connect("leave", lambda *_: self.release())
-        for ctl in (k, m, c, s, f):
-            self.add_controller(ctl)
-
-    def show_frame(self, w, h, pixels):
-        self.texture = Gdk.MemoryTexture.new(w, h, Gdk.MemoryFormat.B8G8R8A8_PREMULTIPLIED, GLib.Bytes.new(pixels), w * 4)
-        self.queue_draw()
-
-    def show_pointer(self, w, h, hot_x, hot_y, image):
-        """Draw the guest's pointer ourselves: it then follows the hand with no round trip through the VM."""
-        if w and h:
-            tex = Gdk.MemoryTexture.new(w, h, Gdk.MemoryFormat.B8G8R8A8_PREMULTIPLIED, GLib.Bytes.new(image), w * 4)
-            self.set_cursor(Gdk.Cursor.new_from_texture(tex, hot_x, hot_y, self.hidden))
-
-    def _rect(self):
-        """Where the guest screen sits inside the widget: 1:1 when it fits, scaled down otherwise, centred."""
-        w, h, tw, th = self.get_width(), self.get_height(), self.texture.get_width(), self.texture.get_height()
-        scale = min(w / tw, h / th, 1.0) if abs(w - tw) < 3 and abs(h - th) < 3 else min(w / tw, h / th)
-        return round((w - tw * scale) / 2), round((h - th * scale) / 2), tw * scale, th * scale
-
-    def do_snapshot(self, snap):
-        if self.texture:
-            rect = Graphene.Rect().init(*self._rect())
-            if hasattr(snap, "append_scaled_texture"):
-                snap.append_scaled_texture(self.texture, Gsk.ScalingFilter.TRILINEAR, rect)
-            else:
-                snap.append_texture(self.texture, rect)
-
-    def _key(self, _ctl, keyval, keycode, _state, down):
-        if self.control:
-            name = Gdk.keyval_name(keyval) or ""
-            if down:
-                code = Gdk.keyval_to_unicode(keyval)
-                self.control.keys(self.translator.press(keycode, name, chr(code) if code else ""))
-            else:
-                self.control.keys(self.translator.release(keycode, name))
-        return True
-
-    def _move(self, x, y):
-        if self.control and self.texture:
-            ox, oy, w, h = self._rect()
-            self.control.move((x - ox) / w, (y - oy) / h)
-
-    def _click(self, gesture, x, y, down):
-        self.grab_focus()
-        name = {1: "left", 2: "middle", 3: "right"}.get(gesture.get_current_button())
-        if self.control and name:
-            self._move(x, y)
-            self.control.button(name, down)
-
-    def _scroll(self, _ctl, _dx, dy):
-        self.scroll += dy
-        while self.control and abs(self.scroll) >= 1:
-            name = "wheel-down" if self.scroll > 0 else "wheel-up"
-            self.control.button(name, True)
-            self.control.button(name, False)
-            self.scroll -= 1 if self.scroll > 0 else -1
-        return True
-
-    def release(self):
-        if self.control:
-            self.control.keys(self.translator.release_all())
-
+WIDE = 940         # from this width up, the home page sets the hero and the protection panel side by side
+BAR = 44           # height of the session bar
 
 STEPS = [("update", "Fetching the latest Tails"), ("integrity", "Verifying the Tails signature"),
          ("sandbox", "Building the sandbox"), ("network", "Opening the protected network"),
-         ("boot", "Starting Tails"), ("welcome", "Passing the Welcome Screen"), ("hardening", "Hardening Tails")]
+         ("boot", "Starting Tails"), ("welcome", "Passing the Welcome Screen"),
+         ("hardening", "Hardening Tails"), ("tor", "Connecting to Tor")]
 
 
 class Window(Gtk.ApplicationWindow):
     def __init__(self, app):
-        super().__init__(application=app, title="Lethe", default_width=980, default_height=760)
+        super().__init__(application=app, title="Lethe", default_width=1120, default_height=760)
         self.add_css_class("lethe")
         self.cfg = core.settings()
         self.session = self.screen = self.control = self.watch = None
-        self.serial, self.pointer, self.threat, self.latest = -1, None, None, None
+        self.serial, self.pointer, self.threat, self.latest = 0, None, None, None
         self.width, self.columns, self.vm_size, self.vm_size_at = 0, [], None, 0
-        self.stack = Gtk.Stack(transition_type=Gtk.StackTransitionType.CROSSFADE, transition_duration=200)
+        self.meter = Meter("display")
+        self.stack = Gtk.Stack(transition_type=Gtk.StackTransitionType.CROSSFADE, transition_duration=180)
         self.set_child(self.stack)
         for name, page in (("home", self._home()), ("prefs", self._prefs()), ("launch", self._launch()),
                            ("live", self._live()), ("end", self._end())):
@@ -271,98 +38,113 @@ class Window(Gtk.ApplicationWindow):
         self.connect("close-request", self._closing)
         self.add_tick_callback(self._frame)                 # once per display refresh
         GLib.timeout_add_seconds(1, self._tick)
+        self.autostart = bool(os.environ.pop("LETHE_AUTOSTART", None))     # `lethe start`
         self.refresh()
         threading.Thread(target=self._check_latest, daemon=True).start()
-        self.autostart = bool(os.environ.pop("LETHE_AUTOSTART", None))    # `lethe start`
 
-    def _page(self, centered=False):
-        """A scrolling page holding one centred column that never exceeds COLUMN px."""
-        col = box(halign=Gtk.Align.CENTER, valign=Gtk.Align.CENTER if centered else Gtk.Align.START,
-                  margin_top=22, margin_bottom=30)
-        self.columns.append(col)
-        return Gtk.ScrolledWindow(hscrollbar_policy=Gtk.PolicyType.NEVER, child=col), col
+    def _scroller(self, column):
+        self.columns.append(column)
+        return Gtk.ScrolledWindow(hscrollbar_policy=Gtk.PolicyType.NEVER, child=column)
 
-    def _grid(self):
-        return Gtk.FlowBox(selection_mode=Gtk.SelectionMode.NONE, homogeneous=True, column_spacing=10, row_spacing=10,
-                           min_children_per_line=1, max_children_per_line=3, activate_on_single_click=False)
-
-    def _fill(self, grid, tiles):
-        clear(grid)
-        for t in tiles:
-            grid.append(tile(*t))
-            grid.get_last_child().set_focusable(False)
+    def show(self, page):
+        if page == "home":
+            self.refresh()
+        self.stack.set_visible_child_name(page)
 
     # ── home ────────────────────────────────────────────────────────────────
     def _home(self):
-        page, col = self._page()
-        top = box(False, 9)
-        top.append(logo(24))
-        top.append(label("Lethe", "brand"))
+        col = Column(1120)
+        top = box(False, 10)
+        top.append(image("lethe", 24))
+        top.append(label("Lethe", "wordmark"))
         top.append(Gtk.Box(hexpand=True))
-        top.append(button("Preferences", "outline", lambda: self.stack.set_visible_child_name("prefs")))
-        col.append(top)
+        top.append(button("Preferences", "quiet", lambda: self.show("prefs")))
+        col.add(margins(top, top=26))
 
-        col.append(spaced(label("Leave no memory.", "hero", wrap=True), top=64))
-        status = box(False, 9, margin_top=14)
-        self.status_dot = dot("idle")
-        status.append(self.status_dot)
-        self.subline = label("", "secondary", wrap=True)
-        status.append(self.subline)
-        col.append(status)
+        self.home_body = box(False, 64, valign=Gtk.Align.CENTER, vexpand=True)
+        hero = box(hexpand=True, valign=Gtk.Align.CENTER)
+        hero.append(label("PRIVATE SESSION", "eyebrow"))
+        hero.append(margins(label("Leave no\nmemory.", "display"), top=14))
+        hero.append(margins(label("Tails in a sealed virtual machine with no disk. "
+                                  "When the session ends, nothing of it remains.", "lede", wrap=True, chars=40), top=18))
+        actions = self.actions = box(False, 14, margin_top=34)
         self.start = button("Start Session", "primary", self.launch)
         self.start.set_halign(Gtk.Align.START)
-        col.append(spaced(self.start, top=30))
-        col.append(spaced(label("A sealed, amnesic Tails session. Ending it erases it from memory.", "tertiary", wrap=True), top=14))
+        actions.append(self.start)
+        status = box(False, 9, css="pill-status", valign=Gtk.Align.CENTER, halign=Gtk.Align.START)
+        self.status_dot = dot()
+        status.append(self.status_dot)
+        self.status = label("Checking…")
+        status.append(self.status)
+        actions.append(status)
+        hero.append(actions)
+        self.problem = label("", "caption", wrap=True, chars=44)
+        hero.append(margins(self.problem, top=16))
+        self.home_body.append(hero)
 
-        col.append(spaced(label("PROTECTION", "micro"), top=58, bottom=12))
-        self.tiles = self._grid()
-        col.append(self.tiles)
-        return page
+        self.side = box(spacing=12, valign=Gtk.Align.CENTER)
+        head = box(False, 8, margin_start=4, margin_end=4)
+        title = label("PROTECTION", "eyebrow")
+        title.set_hexpand(True)
+        head.append(title)
+        self.score = label("", "eyebrow")
+        head.append(self.score)
+        self.side.append(head)
+        self.checks = box(css="panel")
+        self.side.append(self.checks)
+        self.home_body.append(self.side)
+        col.add(margins(self.home_body, top=40, bottom=40))
+        return self._scroller(col)
 
     # ── preferences ─────────────────────────────────────────────────────────
     def _prefs(self):
-        page, col = self._page()
-        top = box(False, 10)
-        top.append(button("Back", "outline", self._home_again))
-        top.append(Gtk.Box(hexpand=True))
-        col.append(top)
-        col.append(spaced(label("Preferences", "title"), top=34))
+        col = Column(680)
+        back = button("Back", "ghost", lambda: self.show("home"), icon="back")
+        back.set_halign(Gtk.Align.START)
+        col.add(margins(back, top=22))
+        col.add(margins(label("Preferences", "title"), top=18, bottom=8))
 
-        col.append(spaced(label("VPN", "micro"), top=38))
-        col.append(Gtk.Box(css_classes=["rule"], margin_top=10))
+        def section(title, *rows):
+            col.add(margins(label(title, "eyebrow"), top=30, bottom=10, start=4))
+            col.add(panel(*rows))
+
         self.vpn_switch = Gtk.Switch()
         self.vpn_switch.connect("notify::active", self._vpn_toggled)
-        col.append(line("Route the session through WireGuard",
-                        "Recommended. Your internet provider then sees a VPN instead of Tor, and the VPN only ever sees "
-                        "Tor. The tunnel is the VM's only route: if it drops, nothing leaves. The rest of this computer "
-                        "is not affected.", self.vpn_switch))
-        actions = box(False, 8)
-        self.vpn_remove = button("Remove", "outline", lambda: self._vpn_helper(["remove"], None))
-        actions.append(self.vpn_remove)
-        actions.append(button("Import…", "outline", self._vpn_import))
-        vpn_line = line("Profile", "None", actions)
-        self.vpn_state = vpn_line.get_first_child().get_last_child()
-        col.append(vpn_line)
+        vpn_actions = box(False, 8)
+        self.vpn_remove = button("Remove", "quiet", lambda: self._vpn_helper(["remove"], None))
+        vpn_actions.append(self.vpn_remove)
+        vpn_actions.append(button("Import…", "quiet", self._vpn_import))
+        profile_row = setting_row("WireGuard profile", "None", vpn_actions)
+        self.vpn_state = profile_row.get_first_child().get_last_child()
+        section("NETWORK",
+                setting_row("Connect to Tor automatically",
+                            "Skips the Tor Connection screen. Your network can see that you use Tor, unless "
+                            "the VPN below is on. Turn this off to use bridges.", self._switch("auto_tor")),
+                setting_row("Route the session through a VPN",
+                            "Recommended. Your provider sees a VPN instead of Tor, and the VPN only ever sees Tor. "
+                            "The tunnel is the session's only route: if it drops, nothing leaves.", self.vpn_switch),
+                profile_row)
+        section("SESSION",
+                setting_row("Skip the Welcome Screen",
+                            "Starts in English with a US keyboard, like most Tails users. Your own keyboard "
+                            "layout is translated as you type.", self._switch("skip_welcome")),
+                setting_row("Harden and restyle Tails",
+                            "Stricter privacy settings, Tor Browser at its Safest level, and the Lethe appearance.",
+                            self._switch("harden_guest")))
+        self.findings = box(css="divided")
+        section("SENTINEL",
+                setting_row("Watch this computer during sessions",
+                            "Destroys the session at once if a debugger attaches to it, someone logs in remotely, "
+                            "or a new keyboard is plugged in. A tripwire, not an antivirus: it cannot see "
+                            "malware that already controls the system.", self._switch("sentinel")),
+                self.findings)
+        col.add(margins(Gtk.Box(), bottom=40))
+        return self._scroller(col)
 
-        col.append(spaced(label("SENTINEL", "micro"), top=38))
-        col.append(Gtk.Box(css_classes=["rule"], margin_top=10))
-        self.sentinel_switch = Gtk.Switch(active=self.cfg["sentinel"])
-        self.sentinel_switch.connect("notify::active", lambda s, _p: self._set("sentinel", s.get_active()))
-        col.append(line("Watch this computer during sessions",
-                        "Destroys the session at once if a debugger attaches to it, someone logs in remotely, or a new "
-                        "keyboard is connected. A tripwire, not an antivirus: it cannot see malware that already "
-                        "controls the system.", self.sentinel_switch))
-
-        col.append(spaced(label("SESSION", "micro"), top=38))
-        col.append(Gtk.Box(css_classes=["rule"], margin_top=10))
-        for key, title, hint in (
-                ("skip_welcome", "Skip the Welcome Screen", "Starts in English with a US keyboard, like most Tails users. "
-                                                            "Your own keyboard layout is translated as you type."),
-                ("harden_guest", "Harden and restyle Tails", "Stricter privacy settings, Tor Browser at Safest, and the Lethe appearance.")):
-            sw = Gtk.Switch(active=self.cfg[key])
-            sw.connect("notify::active", lambda s, _p, k=key: self._set(k, s.get_active()))
-            col.append(line(title, hint, sw))
-        return page
+    def _switch(self, key):
+        sw = Gtk.Switch(active=self.cfg[key])
+        sw.connect("notify::active", lambda s, _p: self._set(key, s.get_active()))
+        return sw
 
     def _set(self, key, value):
         if self.cfg.get(key) != value:
@@ -370,46 +152,63 @@ class Window(Gtk.ApplicationWindow):
             core.save_settings(self.cfg)
             self.refresh()
 
+    # ── state ───────────────────────────────────────────────────────────────
     def refresh(self):
-        """Re-run the checks off the UI thread, then redraw."""
+        """Re-run the checks off the main thread, then redraw what depends on them."""
         cfg = dict(self.cfg)
 
         def work():
-            rows = core.audit(cfg)
+            checks = core.audit(cfg)
             found = sentinel.preflight() if cfg["sentinel"] else []
-            ui(self._show_status, rows, found)
+            ui(self._show_status, checks, found)
 
         threading.Thread(target=work, daemon=True).start()
 
-    def _show_status(self, rows, found):
+    def _show_status(self, checks, found):
         if not self.cfg["sentinel"]:
-            guard = ("idle", "Sentinel", "Off. Sessions are not watched.")
+            guard = core.Check("sentinel", "idle", "Sentinel", "Off", "Sessions are not watched.")
         elif found:
-            guard = (found[0][0], "Sentinel", f"{found[0][1]}. {found[0][2]}")
+            guard = core.Check("sentinel", found[0][0], "Sentinel", "Alert", f"{found[0][1]}. {found[0][2]}")
         else:
-            guard = ("ok", "Sentinel", "Armed. No threats found on this computer.")
-        self._fill(self.tiles, [r for r in rows if r[1] != "Components" or r[0] != "ok"] + [guard])
-        bad = [r for r in rows if r[0] == "bad"] + [f for f in found if f[0] == "critical"]
-        weak = [r for r in rows if r[0] == "warn"] + [f for f in found if f[0] == "warning"]
-        version, profile = core.current_version(), core.vpn_profile()
-        for c in ("ok", "warn", "bad", "idle"):
-            self.status_dot.remove_css_class(c)
-        self.subline.remove_css_class("critical")
-        if bad:
-            self.status_dot.add_css_class("bad")
-            self.subline.add_css_class("critical")
-            self.subline.set_label(f"{bad[0][1]}: {bad[0][2]}")
-        elif not core.current_iso():
-            self.status_dot.add_css_class("idle")
-            self.subline.set_label("Tails will be downloaded and verified first (1.9 GB).")
+            guard = core.Check("sentinel", "ok", "Sentinel", "Armed", "Watching this computer. Nothing suspicious found.")
+        checks = checks + [guard]
+        clear(self.checks)
+        for c in checks:
+            self.checks.append(check_row(c))
+        self.score.set_label(f"{sum(c.state == 'ok' for c in checks)} OF {len(checks)}")
+
+        blocking = [c for c in checks if c.state in ("bad", "critical")]
+        weak = [c for c in checks if c.state in ("warn", "warning")]
+        version = core.current_version()
+        self.problem.remove_css_class("critical")
+        if blocking:
+            set_state(self.status_dot, "bad")
+            self.status.set_label("Not safe to start")
+            self.problem.add_css_class("critical")
+            self.problem.set_label(f"{blocking[0].title}: {blocking[0].detail}")
         else:
-            self.status_dot.add_css_class("warn" if weak else "ok")
-            new = f"  ·  {self.latest} installs at next start" if self.latest and self.latest != version else ""
-            self.subline.set_label(("Protected" if not weak else "Ready, with reduced protection")
-                                   + f"  ·  Tails {version} verified{new}")
-        self.start.set_sensitive(not bad)
+            set_state(self.status_dot, "warn" if weak else ("ok" if version else "idle"))
+            self.status.set_label(("Protected" if not weak else "Reduced protection")
+                                  + (f"  ·  Tails {version}" if version else ""))
+            new = self.latest and version and self.latest != version
+            self.problem.set_label(f"Tails {self.latest} will be fetched and verified at the next start." if new else "")
+        self.problem.set_visible(bool(self.problem.get_label()))
+        self.start.set_sensitive(not blocking)
         self.start.set_label("Start Session" if core.current_iso() else "Download Tails and Start")
-        self.vpn_state.set_label(profile or ("None" if INSTALLED else "Run the installer to enable the VPN."))
+
+        clear(self.findings)
+        for state, title, detail in (found if self.cfg["sentinel"] else []):
+            row = box(False, 12, css="row")
+            row.append(dot(state))
+            text = box(spacing=3, hexpand=True)
+            text.append(label(title, "headline"))
+            text.append(label(detail, "caption", wrap=True, chars=48))
+            row.append(text)
+            self.findings.append(row)
+        self.findings.set_visible(bool(self.findings.get_first_child()))
+
+        profile = core.vpn_profile()
+        self.vpn_state.set_label(profile or ("No profile imported" if INSTALLED else "Run the installer to enable the VPN"))
         self.vpn_remove.set_visible(bool(profile))
         self.vpn_switch.set_sensitive(bool(profile))
         self.vpn_switch.set_active(bool(self.cfg["vpn"] and profile))
@@ -428,8 +227,9 @@ class Window(Gtk.ApplicationWindow):
 
     def _vpn_import(self):
         if not INSTALLED:
-            return self.vpn_state.set_label("Run the installer first: the VPN needs its system service.")
-        chooser = Gtk.FileChooserNative(title="Import a WireGuard Profile", transient_for=self, action=Gtk.FileChooserAction.OPEN)
+            return self.vpn_state.set_label("Run the installer first: the VPN needs its system service")
+        chooser = Gtk.FileChooserNative(title="Import a WireGuard Profile", transient_for=self,
+                                        action=Gtk.FileChooserAction.OPEN)
         flt = Gtk.FileFilter()
         flt.set_name("WireGuard profiles (*.conf)")
         flt.add_pattern("*.conf")
@@ -468,76 +268,100 @@ class Window(Gtk.ApplicationWindow):
 
     # ── launch ──────────────────────────────────────────────────────────────
     def _launch(self):
-        page, col = self._page(centered=True)
-        col.append(logo(60))
-        col.append(spaced(label("Starting session", "title", 0.5, wrap=True), top=22))
-        self.status = label("", "secondary", 0.5, wrap=True)
-        col.append(spaced(self.status, top=8))
-        self.progress = Gtk.ProgressBar(margin_top=28, margin_start=90, margin_end=90)
-        col.append(self.progress)
-        self.launch_hint = label("", "tertiary", 0.5, wrap=True)
-        col.append(spaced(self.launch_hint, top=14))
-        col.append(spaced(button("Cancel", "outline", lambda: self.destroy_session("You cancelled the launch")), top=30))
-        return page
+        col = Column(440, valign=Gtk.Align.CENTER, vexpand=True)
+        col.add(image("lethe", 56)).set_halign(Gtk.Align.CENTER)
+        col.add(margins(label("Starting your session", "title", 0.5, wrap=True), top=24))
+        self.launch_hint = col.add(margins(label("", "secondary", 0.5, wrap=True), top=8))
+        self.step_rows = {}
+        steps = col.add(box(css="panel divided", margin_top=30))
+        for key, text in STEPS:
+            row = box(False, 14, css="row")
+            mark = Gtk.Stack(width_request=18, height_request=18, valign=Gtk.Align.CENTER)
+            ring = Gtk.Box(halign=Gtk.Align.CENTER, valign=Gtk.Align.CENTER)
+            ring.add_css_class("ring")
+            mark.add_named(ring, "idle")
+            mark.add_named(Gtk.Spinner(spinning=True), "active")
+            mark.add_named(image("check", 18), "done")
+            name = label(text, "step")
+            name.set_hexpand(True)
+            extra = label("", "mono")
+            for w in (mark, name, extra):
+                row.append(w)
+            steps.append(row)
+            self.step_rows[key] = (row, mark, name, extra)
+        cancel = button("Cancel", "quiet", lambda: self.destroy_session("You cancelled the launch"))
+        cancel.set_halign(Gtk.Align.CENTER)
+        col.add(margins(cancel, top=26, bottom=30))
+        return self._scroller(col)
 
-    def step(self, key):
+    def step(self, key, extra=""):
         log("step", key)
-        self.status.set_label(dict(STEPS)[key] + "…")
-        if key != "update" and key in self.plan:
-            self.progress.set_fraction((self.plan.index(key) + 0.5) / len(self.plan))
+        seen = False
+        for k, (row, mark, name, more) in self.step_rows.items():
+            state = "active" if k == key else ("idle" if seen else "done")
+            seen = seen or k == key
+            mark.set_visible_child_name(state)
+            for c in ("active", "done"):
+                name.remove_css_class(c)
+            if state != "idle":
+                name.add_css_class(state)
+            more.set_label(extra if k == key else "")
 
     def launch(self):
         self.cfg = core.settings()
         self.threat = None
-        outdated = not core.current_iso() or (self.latest and self.latest != core.current_version())
-        self.plan = [k for k, _ in STEPS if not (
-            (k == "update" and not outdated) or (k == "welcome" and not self.cfg["skip_welcome"])
-            or (k == "hardening" and not (self.cfg["skip_welcome"] and self.cfg["harden_guest"])))]
+        outdated = bool(not core.current_iso() or (self.latest and self.latest != core.current_version()))
+        harden = self.cfg["skip_welcome"] and self.cfg["harden_guest"]
+        plan = {"update": outdated, "welcome": self.cfg["skip_welcome"], "hardening": harden,
+                "tor": harden and self.cfg["auto_tor"]}
+        for key, (row, *_) in self.step_rows.items():
+            row.set_visible(plan.get(key, True))
         self.launch_hint.set_label("About a minute." if core.has_kvm() else
                                    "This computer has no hardware virtualisation, so this takes several minutes.")
-        self.progress.set_fraction(0)
-        self.step(self.plan[0])
-        self.stack.set_visible_child_name("launch")
+        self.step("update" if outdated else "integrity")
+        self.show("launch")
         # Tails starts at the size of the area it will be shown in.
         self.vm_size = self._fit(self.get_width(), self.get_height() - BAR)
-        threading.Thread(target=self._run, args=({**self.cfg, "width": self.vm_size[0], "height": self.vm_size[1]},),
-                         daemon=True).start()
+        cfg = {**self.cfg, "width": self.vm_size[0], "height": self.vm_size[1]}
+        threading.Thread(target=self._run, args=(cfg, outdated), daemon=True).start()
 
     @staticmethod
     def _fit(w, h):
-        """A resolution for the VM: the display area, kept even and within sane bounds."""
+        """A resolution for the VM: the display area, even-sized and within sane bounds."""
         return max(800, min(3840, int(w))) & ~1, max(600, min(2160, int(h))) & ~1
 
-    def _run(self, cfg):
+    def _run(self, cfg, outdated):
         """The whole life of one session, on a worker thread."""
         error, wiped = None, 0
         try:
-            if "update" in self.plan:
-                def progress(text, fraction):
-                    ui(self.status.set_label, text + "…")
-                    ui(self.progress.set_fraction, fraction or 0.0)
+            if outdated:
                 try:
-                    core.update(progress)
+                    core.update(lambda _text, f: ui(self.step, "update", f"{f:.0%}" if f else ""))
                 except core.LetheError:
                     if not core.current_iso():
                         raise                              # offline with an older image: carry on with it
             self.session = core.Session(cfg, stage=lambda name: ui(self.step, name))
             vpn = self.session.start()
-            self.screen = rfb.Screen(self.session.vnc_path)
+            self.screen = rfb.Screen(self.session.vnc_path, fill_alpha=NEEDS_ALPHA)
             self.screen.start()
             self.control = rfb.Control(self.session.qmp_path)
             if cfg["sentinel"]:
                 self.watch = sentinel.Sentinel(self.session.vm.pid, self._alarm)
                 self.watch.start()
             if cfg["skip_welcome"]:
+                autopilot = None
+
                 def report(state):
-                    if state in ("welcome", "hardening"):
+                    if state in ("welcome", "hardening", "tor"):
                         ui(self.step, state)
                     elif state in ("ready", "manual"):
-                        ui(self._go_live, vpn, state == "manual")
-                pilot.Pilot(self.screen, self.control, self.session, cfg["harden_guest"], report).start()
+                        ui(self._go_live, vpn, state == "manual", autopilot)
+
+                autopilot = pilot.Pilot(self.screen, self.control, self.session, cfg["harden_guest"],
+                                        cfg["auto_tor"], report)
+                autopilot.start()
             else:
-                ui(self._go_live, vpn, False)
+                ui(self._go_live, vpn, False, None)
             self.session.vm.wait()
         except core.LetheError as e:
             error = str(e)
@@ -559,54 +383,57 @@ class Window(Gtk.ApplicationWindow):
     # ── live session ────────────────────────────────────────────────────────
     def _live(self):
         page = box()
-        bar = box(False, 10, css="bar")
-        bar.append(logo(18))
-        self.clock = label("00:00", "mono secondary")
+        bar = box(False, 12, css="bar", height_request=BAR)
+        bar.append(image("lethe", 18))
+        self.clock = label("00:00", "mono")
         bar.append(self.clock)
+        bar.append(Gtk.Box(hexpand=True))
         self.state_dot = dot("ok")
-        self.state_dot.set_margin_start(8)
         bar.append(self.state_dot)
-        self.state = label("", "micro")
+        self.state = label("", "caption")
         self.state.set_ellipsize(Pango.EllipsizeMode.END)
-        self.state.set_hexpand(True)
         bar.append(self.state)
-        full = Gtk.Button(icon_name="view-fullscreen-symbolic", tooltip_text="Full Screen", valign=Gtk.Align.CENTER)
-        full.add_css_class("symbol")
-        full.connect("clicked", lambda *_: self.unfullscreen() if self.is_fullscreen() else self.fullscreen())
-        bar.append(full)
-        bar.append(button("End Session", "outline end", lambda: self.destroy_session("You ended the session")))
+        bar.append(margins(icon_button("fullscreen", "Full Screen", self._toggle_fullscreen), start=6))
+        bar.append(button("End Session", "end", lambda: self.destroy_session("You ended the session")))
         page.append(bar)
         self.alert = Gtk.Revealer(transition_type=Gtk.RevealerTransitionType.SLIDE_DOWN)
-        self.alert_text = label("", "banner", wrap=True)
+        self.alert_text = label("", "banner", wrap=True, chars=80)
         self.alert.set_child(self.alert_text)
         page.append(self.alert)
         self.display = Display()
         overlay = Gtk.Overlay(child=self.display, vexpand=True)
         self.curtain = box(css="curtain", visible=False)
-        inner = box(spacing=8, valign=Gtk.Align.CENTER, vexpand=True, margin_start=24, margin_end=24)
-        inner.append(logo(52))
-        inner.append(spaced(label("Hidden while your screen is captured", "body", 0.5, wrap=True), top=8))
-        inner.append(label("The session reappears when the recording or screen share stops.", "secondary", 0.5, wrap=True))
+        inner = box(spacing=8, valign=Gtk.Align.CENTER, vexpand=True)
+        inner.append(image("lethe", 48))
+        inner.append(margins(label("Hidden while your screen is being captured", "headline", 0.5, wrap=True), top=10))
+        inner.append(label("The session reappears when the recording or screen share stops.", "caption", 0.5, wrap=True))
         self.curtain.append(inner)
         overlay.add_overlay(self.curtain)
         page.append(overlay)
         return page
 
-    def _go_live(self, vpn, manual):
-        log("live", "manual" if manual else "auto")
+    def _toggle_fullscreen(self):
+        self.unfullscreen() if self.is_fullscreen() else self.fullscreen()
+
+    def _go_live(self, vpn, manual, autopilot):
+        log("live", "manual" if manual else "auto", "tor=" + str(autopilot and autopilot.online))
         firewalled = vpn or os.path.exists(core.NET_SOCK)
-        parts = ["Amnesic", f"VPN {core.vpn_profile()}" if vpn else ("Firewalled" if firewalled else "Not firewalled"),
-                 "Sentinel armed" if self.cfg["sentinel"] else "Sentinel off"]
+        parts = [f"VPN · {core.vpn_profile()}" if vpn else ("Firewalled" if firewalled else "Not firewalled")]
+        if autopilot and autopilot.online:
+            parts.append("Tor connected")
+        parts.append("Sentinel armed" if self.cfg["sentinel"] else "Sentinel off")
         if not core.has_kvm():
             parts.append("Software emulation")
-        self.state.set_label("   ·   ".join(parts).upper())
-        for c in ("ok", "warn"):
-            self.state_dot.remove_css_class(c)
-        self.state_dot.add_css_class("ok" if firewalled and self.cfg["sentinel"] else "warn")
+        self.state.set_label("     ".join(parts))
+        set_state(self.state_dot, "ok" if firewalled and self.cfg["sentinel"] else "warn")
         if manual:
-            self._warn("The Welcome Screen could not be passed automatically. Continue by hand: press Start Tails if you see it.")
+            self._warn("The Welcome Screen could not be passed automatically. Continue by hand: "
+                       "press Start Tails if you see it.")
+        elif autopilot and autopilot.connect and autopilot.hardened and not autopilot.online:
+            self._warn("Tor did not connect within three minutes. The Tor Connection window is open so you can "
+                       "try again or use a bridge.")
         self.display.control = self.control
-        self.stack.set_visible_child_name("live")
+        self.show("live")
         self.display.grab_focus()
 
     def _warn(self, text):
@@ -625,17 +452,22 @@ class Window(Gtk.ApplicationWindow):
             ui(self.curtain.set_visible, severity == "capture")
 
     def _frame(self, *_):
-        """Runs once per display refresh: keeps the layout, the VM's size and its picture in step with the window."""
+        """Once per display refresh: layout, VM size and picture follow the window."""
         width = self.get_width()
-        if width != self.width:
+        if width and width != self.width:
             self.width = width
-            for col in self.columns:                        # every column stays inside the window
-                col.set_size_request(max(260, min(COLUMN, width - 48)), -1)
-            (self.add_css_class if width < 620 else self.remove_css_class)("compact")
-        if self.autostart and width > 0 and self.subline.get_label():   # window has its real size, checks are in
+            wide = width >= WIDE
+            self.home_body.set_orientation(Gtk.Orientation.HORIZONTAL if wide else Gtk.Orientation.VERTICAL)
+            self.home_body.set_homogeneous(wide)          # two equal columns, or one stack
+            self.home_body.set_spacing(72 if wide else 44)
+            compact = width < 640
+            (self.add_css_class if compact else self.remove_css_class)("compact")
+            self.actions.set_orientation(Gtk.Orientation.VERTICAL if compact else Gtk.Orientation.HORIZONTAL)
+        if self.autostart and width and self.status.get_label() != "Checking…":
             self.autostart = False
             if self.start.get_sensitive():
                 self.launch()
+
         screen = self.screen
         if not screen or self.stack.get_visible_child_name() != "live":
             return True
@@ -643,18 +475,17 @@ class Window(Gtk.ApplicationWindow):
         want = self._fit(self.display.get_width(), self.display.get_height())
         if want != self.vm_size:
             self.vm_size, self.vm_size_at = want, time.monotonic()
-        elif self.vm_size_at and time.monotonic() - self.vm_size_at > 0.35:
+        elif self.vm_size_at and time.monotonic() - self.vm_size_at > 0.3:
             self.vm_size_at = 0
-            log("resize", want, "resizable" if screen.resizable else "fixed display")
             screen.request_size(*want)
-        if screen.serial != self.serial:
-            w, h, pixels, self.serial = screen.snapshot()
-            if w:
-                self.display.show_frame(w, h, pixels)
+        frame = screen.take(self.serial)
+        if frame:
+            self.serial = frame.serial
+            self.display.update(frame)
             if screen.cursor and screen.cursor[0] != self.pointer:
                 self.pointer = screen.cursor[0]
-                log("pointer", screen.cursor[1:5])
                 self.display.show_pointer(*screen.cursor[1:])
+        self.meter.tick(vm=screen.frames, shown=self.display.shown)
         return True
 
     def _tick(self):
@@ -669,24 +500,20 @@ class Window(Gtk.ApplicationWindow):
 
     # ── the end ─────────────────────────────────────────────────────────────
     def _end(self):
-        page, col = self._page(centered=True)
-        col.append(logo(60))
-        self.end_title = label("", "title", 0.5, wrap=True)
-        col.append(spaced(self.end_title, top=22))
-        self.end_text = label("", "secondary", 0.5, wrap=True)
-        col.append(spaced(self.end_text, top=8))
-        self.wipe_bar = Gtk.ProgressBar(margin_top=28, margin_start=90, margin_end=90)
-        col.append(self.wipe_bar)
-        self.facts = self._grid()
-        col.append(spaced(self.facts, top=34))
-        self.end_button = button("Done", "primary", self._home_again)
-        col.append(spaced(self.end_button, top=30))
-        return page
+        col = Column(480, valign=Gtk.Align.CENTER, vexpand=True)
+        col.add(image("lethe", 56)).set_halign(Gtk.Align.CENTER)
+        self.end_title = col.add(margins(label("", "title", 0.5, wrap=True), top=24))
+        self.end_text = col.add(margins(label("", "secondary", 0.5, wrap=True), top=8))
+        self.wipe_bar = col.add(Gtk.ProgressBar(margin_top=30, margin_start=70, margin_end=70))
+        self.facts = col.add(box(css="panel", margin_top=30))
+        self.end_button = button("Done", "primary", lambda: self.show("home"))
+        self.end_button.set_halign(Gtk.Align.CENTER)
+        col.add(margins(self.end_button, top=28, bottom=30))
+        return self._scroller(col)
 
     def _ending(self):
         self.display.control = None
-        self.display.texture = None
-        self.display.set_cursor(self.display.hidden)
+        self.display.clear()
         self.pointer = None
         self.curtain.set_visible(False)
         self.alert.set_reveal_child(False)
@@ -696,10 +523,10 @@ class Window(Gtk.ApplicationWindow):
         self.end_title.set_label("Ending session")
         self.end_text.set_label("Overwriting the session's memory…")
         self.wipe_bar.set_fraction(0)
-        for w in (self.facts, self.end_button):
-            w.set_visible(False)
         self.wipe_bar.set_visible(True)
-        self.stack.set_visible_child_name("end")
+        self.facts.set_visible(False)
+        self.end_button.set_visible(False)
+        self.show("end")
 
     def _ended(self, why, wiped, seconds, failed, threat):
         log("ended", f"why={why!r} wiped={wiped} seconds={seconds:.0f} failed={failed} threat={threat}")
@@ -711,19 +538,20 @@ class Window(Gtk.ApplicationWindow):
         else:
             self.end_title.set_label("Session destroyed.")
             self.end_text.set_label(f"{why}." if why else "Nothing of it remains.")
+        clear(self.facts)
         facts = []
         if wiped:
-            facts.append(("ok", "Memory", f"{wiped / (1 << 30):.1f} GB overwritten with zeros before release."))
+            facts.append(core.Check("memory", "ok", "Memory", f"{wiped / (1 << 30):.1f} GB",
+                                    "Overwritten with zeros before release."))
         if wiped or not failed:
-            facts.append(("ok", "Disk", "Nothing written: no virtual disk, swap, crash dump or activity log."))
-            facts.append(("ok", "Duration", f"{int(seconds) // 60} min {int(seconds) % 60} s. The Tails image was never modified."))
-        self._fill(self.facts, facts)
+            facts.append(core.Check("integrity", "ok", "Disk", "Untouched",
+                                    "No virtual disk, swap, crash dump or activity log."))
+            facts.append(core.Check("image", "ok", "Tails image", "Unmodified",
+                                    f"The session lasted {int(seconds) // 60} min {int(seconds) % 60} s."))
+        for f in facts:
+            self.facts.append(check_row(f))
         self.facts.set_visible(bool(facts))
         self.end_button.set_visible(True)
-
-    def _home_again(self):
-        self.refresh()
-        self.stack.set_visible_child_name("home")
 
     def _closing(self, *_):
         if self.session:                      # closing the window ends the session
@@ -734,6 +562,21 @@ class Window(Gtk.ApplicationWindow):
                 time.sleep(0.02)
         return False
 
+    # ── rendering pages without a session (development) ─────────────────────
+    def preview(self, page):
+        self.stack.set_transition_type(Gtk.StackTransitionType.NONE)
+        if page == "launch":
+            for key, (row, *_) in self.step_rows.items():
+                row.set_visible(key != "update")
+            self.launch_hint.set_label("About a minute.")
+            self.step("hardening")
+        elif page == "end":
+            self._ending()
+            self._ended("You ended the session", 4 << 30, 754, False, False)
+        elif page == "live":
+            self._go_live(False, False, None)
+        self.stack.set_visible_child_name(page)
+
 
 def main():
     app = Gtk.Application(application_id=APP_ID)
@@ -741,16 +584,7 @@ def main():
     def activate(app):
         if app.get_active_window():
             return app.get_active_window().present()
-        settings = Gtk.Settings.get_default()
-        if hasattr(Gtk, "InterfaceColorScheme"):
-            settings.set_property("gtk-interface-color-scheme", Gtk.InterfaceColorScheme.DARK)
-        else:
-            settings.set_property("gtk-application-prefer-dark-theme", True)
-        provider = Gtk.CssProvider()
-        provider.load_from_string(CSS) if hasattr(provider, "load_from_string") else provider.load_from_data(CSS.encode())
-        Gtk.StyleContext.add_provider_for_display(Gdk.Display.get_default(), provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
-        Gtk.IconTheme.get_for_display(Gdk.Display.get_default()).add_search_path(ASSETS)
-        Gtk.Window.set_default_icon_name("lethe")
+        setup_style()
         Window(app).present()
 
     app.connect("activate", activate)

@@ -1,0 +1,95 @@
+/* Lethe. Monochrome: a near-black canvas, white type in Inter, one white pill
+   for the main action. Colour appears only where it means something: status. */
+
+window.lethe {
+  background: #0b0b0c;
+  color: #f5f5f7;
+  font-family: Inter, "SF Pro Text", "Helvetica Neue", sans-serif;
+  font-size: 14px;
+  font-feature-settings: "cv11", "ss01";
+}
+window.lethe *:focus-visible { outline: 2px solid rgba(245, 245, 247, 0.55); outline-offset: 3px; }
+
+/* ── type ─────────────────────────────────────────────────────────────────── */
+.display { font-size: 58px; font-weight: 600; letter-spacing: -2.5px; line-height: 0.98; }
+.compact .display { font-size: 38px; letter-spacing: -1.4px; }
+.title { font-size: 30px; font-weight: 600; letter-spacing: -1.0px; }
+.headline { font-size: 14px; font-weight: 600; letter-spacing: -0.1px; }
+.lede { font-size: 16px; color: rgba(245, 245, 247, 0.62); }
+.secondary { color: rgba(245, 245, 247, 0.58); }
+.caption { font-size: 12.5px; color: rgba(245, 245, 247, 0.42); }
+.eyebrow { font-size: 11px; font-weight: 600; letter-spacing: 1.4px; color: rgba(245, 245, 247, 0.42); }
+.wordmark { font-size: 15px; font-weight: 600; letter-spacing: -0.2px; }
+.value { font-size: 13px; font-weight: 500; color: rgba(245, 245, 247, 0.78); }
+.mono { font-family: "SF Mono", "JetBrains Mono", "DejaVu Sans Mono", monospace; font-size: 12.5px;
+        font-feature-settings: "tnum"; color: rgba(245, 245, 247, 0.62); }
+.critical { color: #ff6b62; }
+
+/* ── surfaces ─────────────────────────────────────────────────────────────── */
+.panel {
+  background: rgba(255, 255, 255, 0.032);
+  border: 1px solid rgba(255, 255, 255, 0.075);
+  border-radius: 18px;
+}
+.row { padding: 14px 18px; }
+.row.slim { padding: 12px 18px; }
+.row + .row, .divided > * + * { border-top: 1px solid rgba(255, 255, 255, 0.065); }
+.icon { opacity: 0.82; }
+
+/* ── status ───────────────────────────────────────────────────────────────── */
+.dot { min-width: 7px; min-height: 7px; border-radius: 99px; }
+.dot.ok { background: #34c77b; }
+.dot.warn { background: #ff9f0a; }
+.dot.bad { background: #ff453a; }
+.dot.idle { background: rgba(255, 255, 255, 0.24); }
+.pill-status { padding: 6px 12px 6px 11px; border-radius: 99px; background: rgba(255, 255, 255, 0.05);
+               border: 1px solid rgba(255, 255, 255, 0.07); font-size: 12.5px; font-weight: 500; }
+
+/* ── controls ─────────────────────────────────────────────────────────────── */
+button { background-image: none; box-shadow: none; text-shadow: none; border: none; min-height: 0; min-width: 0;
+         transition: background 150ms ease, color 150ms ease, border-color 150ms ease; }
+button.primary { background: #f5f5f7; color: #0b0b0c; font-weight: 600; font-size: 15px; border-radius: 99px; padding: 13px 30px; }
+button.primary:hover { background: #ffffff; }
+button.primary:active { background: #d9d9de; }
+button.primary:disabled { background: rgba(255, 255, 255, 0.08); color: rgba(245, 245, 247, 0.3); }
+button.quiet { background: rgba(255, 255, 255, 0.06); color: #f5f5f7; font-weight: 500; font-size: 13px;
+               border-radius: 99px; padding: 7px 15px; }
+button.quiet:hover { background: rgba(255, 255, 255, 0.11); }
+button.ghost { background: none; color: rgba(245, 245, 247, 0.62); font-weight: 500; font-size: 13.5px;
+               border-radius: 99px; padding: 7px 12px 7px 8px; }
+button.ghost:hover { background: rgba(255, 255, 255, 0.06); color: #f5f5f7; }
+button.end { background: rgba(255, 255, 255, 0.06); color: #f5f5f7; font-weight: 600; font-size: 13px;
+             border-radius: 99px; padding: 6px 16px; }
+button.end:hover { background: #e5484d; color: #ffffff; }
+button.iconic { background: none; border-radius: 99px; padding: 6px; }
+button.iconic:hover { background: rgba(255, 255, 255, 0.08); }
+
+/* GTK gives the knob the full track height and half its width: a 52 x 26 track makes each half a
+   square, and a 2px inset turns the knob into a 22px circle. */
+switch { min-width: 52px; min-height: 26px; padding: 0; margin: 0; border-radius: 99px; border: none; box-shadow: none;
+         background: rgba(120, 120, 128, 0.34); transition: background 200ms ease; }
+switch:hover { background: rgba(120, 120, 128, 0.44); }
+switch:checked { background: #30d158; }
+switch:checked:hover { background: #3ddc65; }
+switch slider { min-width: 22px; min-height: 22px; margin: 2px; border-radius: 99px; border: none;
+                background: #ffffff; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.30); }
+switch image { opacity: 0; -gtk-icon-size: 1px; }
+switch:disabled { opacity: 0.35; }
+
+progressbar trough { background: rgba(255, 255, 255, 0.1); border-radius: 99px; min-height: 2px; border: none; }
+progressbar progress { background: #f5f5f7; border-radius: 99px; min-height: 2px; border: none; }
+spinner { color: #f5f5f7; }
+
+/* ── launch checklist ─────────────────────────────────────────────────────── */
+.step { color: rgba(245, 245, 247, 0.34); }
+.step.active { color: #f5f5f7; font-weight: 500; }
+.step.done { color: rgba(245, 245, 247, 0.62); }
+.ring { min-width: 16px; min-height: 16px; border-radius: 99px; border: 1.5px solid rgba(255, 255, 255, 0.18); }
+
+/* ── live session ─────────────────────────────────────────────────────────── */
+.bar { background: #0b0b0c; border-bottom: 1px solid rgba(255, 255, 255, 0.07); padding: 6px 10px 6px 14px; }
+.banner { background: #241b0b; color: #f6c97f; padding: 9px 16px; font-size: 13px; }
+.vm, .curtain { background: #000000; }
+
+scrollbar { background: none; border: none; }
+scrollbar slider { background: rgba(255, 255, 255, 0.14); border: none; min-width: 6px; border-radius: 99px; }

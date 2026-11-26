@@ -31,7 +31,7 @@ TAILS_FPR = "A490D0F4D311A4153E2BB7CADBB802B258ACD84F"
 CURL = ["curl", "--proto", "=https", "--proto-redir", "=https", "--tlsv1.2", "-fL", "--retry", "3"]
 # cpus 0 = automatic: half the cores, at most 4
 DEFAULTS = {"ram_mb": 4096, "cpus": 0, "width": 1920, "height": 1080, "skip_welcome": True,
-            "translate_keys": True, "harden_guest": True, "vpn": False, "sentinel": True}
+            "harden_guest": True, "auto_tor": True, "vpn": False, "sentinel": True}
 
 
 class LetheError(Exception):
@@ -291,6 +291,8 @@ class Session:
 
     def start(self):
         cfg = self.cfg
+        if running():
+            raise LetheError("Another session is already running. End it first.")
         iso = current_iso()
         if not iso:
             raise LetheError("No verified Tails image yet.")
@@ -350,7 +352,8 @@ class Session:
         if cfg["harden_guest"]:
             disc = os.path.join(RT, "config.iso")
             files = {"SETUP.SH": "guest/setup.sh", "GTK4.CSS": "guest/gtk4.css", "GTK3.CSS": "guest/gtk3.css",
-                     "WALL.PNG": "assets/wallpaper.png", "INTER.TTF": "assets/Inter.ttf"}
+                     "WALL.PNG": "assets/wallpaper.png",
+                     "ONLINE.PNG": "assets/wallpaper-online.png", "INTER.TTF": "assets/Inter.ttf"}
             with open(disc, "wb") as f:
                 f.write(build_iso("LETHE", {n: open(os.path.join(LIB, p), "rb").read() for n, p in files.items()}))
             bwrap += ["--ro-bind", disc, "/config.iso"]
@@ -372,8 +375,9 @@ class Session:
                 "-netdev", f"socket,id=net0,fd={net.fileno()}", "-device", "virtio-net-pci,netdev=net0,romfile=",
                 "-device", "virtio-rng-pci",
                 "-device", "virtio-tablet-pci",      # absolute pointer without emulating a USB controller
+                "-device", "virtio-keyboard-pci",    # keys arrive in a queue, not through an emulated 8042 chip
                 # virtio: resizable, pointer drawn by us. VGA: smallest possible device, fixed size.
-                "-device", (os.environ.get("LETHE_DISPLAY_DEV", "virtio-vga") + f",xres={cfg['width']},yres={cfg['height']}" if self.virtio
+                "-device", (f"virtio-vga,xres={cfg['width']},yres={cfg['height']}" if self.virtio
                             else f"VGA,vgamem_mb=32,xres={cfg['width']},yres={cfg['height']}"),
                 "-display", "none", "-vnc", "unix:/run/q/vnc.sock",
                 "-qmp", "unix:/run/q/qmp.sock,server=on,wait=off",
@@ -493,31 +497,46 @@ class Session:
 
 # ── Audit ────────────────────────────────────────────────────────────────────
 
+class Check:
+    """One protection layer. state: ok | warn | bad. value: one word for the UI. detail: one sentence."""
+    __slots__ = ("key", "state", "title", "value", "detail")
+
+    def __init__(self, key, state, title, value, detail):
+        self.key, self.state, self.title, self.value, self.detail = key, state, title, value, detail
+
+    def __iter__(self):                      # (state, title, detail), for plain listings
+        return iter((self.state, self.title, self.detail))
+
+
 def audit(cfg=None):
-    """Every protection layer on this machine: [(state, title, detail)], state in ok|warn|bad."""
+    """Every protection layer on this machine, in the order the UI shows them."""
     cfg = cfg or settings()
-    rows = []
-    add = lambda ok, title, good, bad, sev="bad": rows.append(("ok" if ok else sev, title, good if ok else bad))
-    tools = [t for t in ("qemu-system-x86_64", "bwrap", "passt", "gpg", "curl") if not shutil.which(t)]
-    add(not tools, "Components", "Every component is installed", "Missing: " + ", ".join(tools))
-    add(has_kvm(), "Virtualisation", "Hardware isolation (KVM) is active",
-        "No hardware virtualisation: Tails will run in slow software emulation", "warn")
+    checks = []
+
+    def add(key, ok, title, good, bad, sev="bad"):
+        checks.append(Check(key, "ok" if ok else sev, title, *(good if ok else bad)))
+
+    missing = [t for t in ("qemu-system-x86_64", "bwrap", "passt", "gpg", "curl") if not shutil.which(t)]
+    if missing:
+        add("components", False, "Components", None, ("Missing", "Not installed: " + ", ".join(missing)))
     v = current_version()
-    add(bool(current_iso()), "Tails image", f"Tails {v}, signature checked before every start",
-        "Not downloaded yet", "warn")
-    swap = disk_swap()
-    safe = memlock_ok(cfg["ram_mb"]) or cgroup_noswap() or not swap or bool(shutil.which("systemd-run"))
-    add(safe, "Memory", "Locked in RAM, never swapped, wiped with zeros on exit",
-        "Guest memory could reach the on-disk swap")
-    add(bool(shutil.which("systemd-inhibit")), "Sleep guard", "Session is destroyed before suspend or hibernate",
-        "Cannot intercept sleep on this system", "warn")
-    add(True, "Display", "The VM has no access to your desktop, clipboard or screen", "")
+    add("image", bool(current_iso()), "Tails image", ("Verified", f"Tails {v}. The signature is checked before every start."),
+        ("Not yet", "Downloaded and verified the first time you start."), "warn")
+    add("isolation", has_kvm(), "Isolation", ("Hardware", "Sealed virtual machine with no disk, inside a sandbox."),
+        ("Software", "No hardware virtualisation: sealed, but slow."), "warn")
+    safe = memlock_ok(cfg["ram_mb"]) or cgroup_noswap() or not disk_swap() or bool(shutil.which("systemd-run"))
+    add("memory", safe, "Memory", ("Locked", "Never swapped to disk. Overwritten with zeros when the session ends."),
+        ("Exposed", "Session memory could be written to the swap file."))
     if cfg["vpn"]:
-        add(vpn_up(), "Network", f"WireGuard-only route ({vpn_profile()}), kill switch built in",
-            "VPN is on but no tunnel is active: sessions will refuse to start")
+        add("network", vpn_up(), "Network", (vpn_profile() or "VPN", "WireGuard is the only route. If it drops, nothing leaves."),
+            ("VPN down", "The VPN is on but its tunnel is not up. Sessions will not start."))
     else:
-        add(os.path.exists(NET_SOCK), "Network", "Firewalled: public internet only, no LAN or localhost",
-            "Not firewalled from your local network (run the installer)", "warn")
-    add(os.stat(os.path.join(LIB, "lethe", "core.py")).st_uid == 0, "Self-protection",
-        "Lethe's own files are root-owned and tamper-resistant", "Running from a user-writable folder", "warn")
-    return rows
+        add("network", os.path.exists(NET_SOCK), "Network", ("Firewalled", "Public internet only. Your network and this computer are unreachable."),
+            ("Open", "Not walled off from your local network. Run the installer to fix this."), "warn")
+    add("display", True, "Display", ("Isolated", "No access to your desktop, clipboard, camera or microphone."), None)
+    add("sleep", bool(shutil.which("systemd-inhibit")), "Sleep", ("Guarded", "The session is destroyed before the computer sleeps."),
+        ("Unguarded", "Sleep cannot be intercepted on this system."), "warn")
+    add("integrity", os.stat(os.path.join(LIB, "lethe", "core.py")).st_uid == 0, "Integrity",
+        ("Sealed", "Lethe's own files are root-owned and checked before each session."),
+        ("Unsealed", "Running from a folder your user can modify."), "warn")
+    return checks

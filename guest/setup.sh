@@ -2,10 +2,14 @@
 # Lethe guest hardening. Runs once inside Tails, as the unprivileged "amnesia"
 # user, from the read-only LETHE config disc. Everything here is stricter than
 # the Tails defaults and vanishes with the session, like the rest of Tails.
-D=/media/amnesia/LETHE
 g() { gsettings set "$@" 2>/dev/null; }
 
-# Brand wallpaper (copied to RAM so the disc can be ejected).
+# Copy everything off the disc first. Lethe ejects it as soon as the wallpaper
+# changes below, so nothing after this point may read from the disc.
+D="$HOME/.lethe"
+mkdir -p "$D" && cp /media/amnesia/LETHE/* "$D/" && chmod -R u+w "$D"
+
+# Brand wallpaper. Changing it is also the signal that the disc can go.
 cp "$D/wall.png" "$HOME/.lethe-wallpaper.png" && {
   g org.gnome.desktop.background picture-uri "file://$HOME/.lethe-wallpaper.png"
   g org.gnome.desktop.background picture-uri-dark "file://$HOME/.lethe-wallpaper.png"
@@ -75,5 +79,19 @@ user_pref("browser.security_level.security_slider", 1);
 user_pref("browser.security_level.security_custom", false);
 EOF
 fi
+
+# Lethe already tells you, before the session starts, that the host can see inside
+# the VM. Tails would repeat it once its clock is synced: cancel that for this session.
+systemctl --user mask --runtime tails-virt-notify-user.service 2>/dev/null
+systemctl --user stop tails-virt-notify-user.service 2>/dev/null
+
+# Tell Lethe when Tor is connected, without any channel out of the VM: switch to a
+# copy of the wallpaper that is 1.4% brighter. Invisible to you, measurable to Lethe.
+cp "$D/online.png" "$HOME/.lethe-online.png"
+(
+  until systemctl --quiet is-active tails-tor-has-bootstrapped.target; do sleep 1; done
+  g org.gnome.desktop.background picture-uri "file://$HOME/.lethe-online.png"
+  g org.gnome.desktop.background picture-uri-dark "file://$HOME/.lethe-online.png"
+) >/dev/null 2>&1 &
 
 touch "$HOME/.lethe-ready"

@@ -14,7 +14,7 @@ lethe doctor      # audit every protection layer on this machine
 
 1. The Tails image is checked against the Tails signing key (fingerprint pinned in the code). This happens on download and again before every start.
 2. A sandbox is built and Tails boots inside it. No virtual disk exists.
-3. Lethe passes the Tails Welcome Screen for you (English, US keyboard, the defaults most Tails users have) and applies stricter settings and the Lethe appearance. It does this by pressing keys, like a person: the image stays byte-for-byte the signed original.
+3. Lethe passes the Tails Welcome Screen for you (English, US keyboard, the defaults most Tails users have), applies stricter settings and the Lethe appearance, and connects to Tor automatically (can be turned off in Preferences, e.g. to use bridges). It does this by pressing keys, like a person: the image stays byte-for-byte the signed original.
 4. Your keyboard layout is translated as you type, so an AZERTY `a` is still an `a`.
 5. When the session ends, its memory is overwritten with zeros.
 

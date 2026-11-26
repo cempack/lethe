@@ -87,8 +87,11 @@ $SUDO rm -rf "$LIB"
 $SUDO install -d -o root -g root -m 0755 "$LIB/lethe" "$LIB/guest" "$LIB/assets"
 $SUDO install -o root -g root -m 0644 "$here"/lethe/*.py "$LIB/lethe/"
 $SUDO install -o root -g root -m 0644 "$here"/guest/* "$LIB/guest/"
-$SUDO install -o root -g root -m 0644 "$here"/assets/lethe.svg "$here"/assets/wallpaper.png \
+$SUDO install -o root -g root -m 0644 "$here"/assets/lethe.svg "$here"/assets/lethe.css \
+  "$here"/assets/wallpaper.png "$here"/assets/wallpaper-online.png \
   "$here"/assets/Inter.ttf "$here"/assets/Inter-LICENSE.txt "$LIB/assets/"
+$SUDO install -d -o root -g root -m 0755 "$LIB/assets/icons"
+$SUDO install -o root -g root -m 0644 "$here"/assets/icons/*.svg "$LIB/assets/icons/"
 $SUDO install -D -o root -g root -m 0755 "$here/lethe.py" /usr/local/bin/lethe
 # The Sentinel compares Lethe's files against this list before every session.
 (cd "$LIB" && find lethe guest assets -type f | sort | xargs sha256sum) | $SUDO tee "$LIB/MANIFEST" >/dev/null
