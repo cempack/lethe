@@ -1,22 +1,18 @@
-/* Lethe for GNOME Shell. Graphite glass, white type, colour only where it means something. */
+/* Lethe for GNOME Shell. GNOME's own shapes and sizes, in Lethe's graphite. */
 
-/* ── top bar: a slim menu bar ─────────────────────────────────────────────── */
-.lethe #panel { background-color: rgba(14, 14, 16, 0.62); height: 30px; font-size: 13px; font-weight: 500; }
-.lethe #panel .panel-button { color: #f5f5f7; border-radius: 7px; -natural-hpadding: 10px; -minimum-hpadding: 6px;
-                              margin: 3px 1px; border: none; box-shadow: none; }
-.lethe #panel .panel-button:hover { background-color: rgba(255, 255, 255, 0.12); }
-.lethe #panel .panel-button:active, .lethe #panel .panel-button:checked { background-color: rgba(255, 255, 255, 0.18); }
-.lethe #panel .lethe-mark { -natural-hpadding: 12px; margin-left: 6px; }
-.lethe #panel .lethe-app-name { font-weight: 700; -natural-hpadding: 6px; }
-.lethe #panel .clock-display .clock { font-weight: 500; }
+/* Top bar: see-through over the wallpaper instead of a black band. */
+.lethe #panel { background-color: rgba(11, 11, 12, 0.72); }
+.lethe #panel .lethe-mark { -natural-hpadding: 10px; -minimum-hpadding: 6px; }
+.lethe #panel .lethe-app-name { font-weight: bold; padding: 0 6px 0 2px; color: #f5f5f7; }
 
-/* ── dock ─────────────────────────────────────────────────────────────────── */
-.lethe-dock { background-color: rgba(34, 34, 38, 0.72); border: 1px solid rgba(255, 255, 255, 0.13);
-              border-radius: 24px; padding: 6px 6px 3px; spacing: 2px; margin-bottom: 8px;
-              box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45); }
-.lethe-dock-item { padding: 2px 3px 0; border-radius: 14px; background: none; }
-.lethe-dock-dot { width: 4px; height: 4px; border-radius: 2px; margin-top: 3px; background-color: rgba(245, 245, 247, 0.9); }
-.lethe-dock-sep { width: 1px; background-color: rgba(255, 255, 255, 0.16); margin: 10px 6px 12px; }
-.lethe-dock-grid { color: #f5f5f7; padding: 9px; background-color: rgba(255, 255, 255, 0.09); border-radius: 12px; }
-.lethe-dock-label { background-color: rgba(34, 34, 38, 0.94); color: #f5f5f7; border: 1px solid rgba(255, 255, 255, 0.12);
-                    border-radius: 8px; padding: 4px 10px; font-size: 12.5px; font-weight: 500; }
+/* Dock: the dash, resting on the desktop. One solid graphite surface with a hairline of light. */
+.lethe-dock .dash-background { background-color: #1e2026; border: 1px solid rgba(255, 255, 255, 0.09);
+                               box-shadow: 0 10px 28px rgba(0, 0, 0, 0.5); margin-bottom: 10px; }
+.lethe-dock .dash-separator { margin-bottom: 10px; }
+.lethe-dock .dash-item-container .show-apps .overview-icon,
+.lethe-dock .dash-item-container .overview-tile .overview-icon { background-color: transparent; }
+.lethe-dock .dash-item-container .show-apps:hover .overview-icon,
+.lethe-dock .dash-item-container .overview-tile:hover .overview-icon { background-color: rgba(255, 255, 255, 0.08); }
+.lethe-dock .dash-item-container .show-apps:active .overview-icon,
+.lethe-dock .dash-item-container .show-apps:checked .overview-icon,
+.lethe-dock .dash-item-container .overview-tile:active .overview-icon { background-color: rgba(255, 255, 255, 0.13); }

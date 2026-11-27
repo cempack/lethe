@@ -1,10 +1,10 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
 <defs>
-  <linearGradient id="b" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ff6f61"/><stop offset="1" stop-color="#cf3024"/></linearGradient>
-  <linearGradient id="r" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity="0.2"/><stop offset="0.5" stop-color="#fff" stop-opacity="0.03"/><stop offset="1" stop-color="#000" stop-opacity="0.18"/></linearGradient>
-  <filter id="s" x="-10%" y="-10%" width="120%" height="130%"><feDropShadow dx="0" dy="2" stdDeviation="2.2" flood-color="#000" flood-opacity="0.35"/></filter>
+  <linearGradient id="t" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#494a51"/><stop offset="1" stop-color="#202125"/></linearGradient>
+  <linearGradient id="r" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity="0.32"/><stop offset="0.5" stop-color="#fff" stop-opacity="0.05"/><stop offset="1" stop-color="#fff" stop-opacity="0.02"/></linearGradient>
+  <linearGradient id="i" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffffff"/><stop offset="1" stop-color="#f7f7f9" stop-opacity="0.82"/></linearGradient>
 </defs>
-<g filter="url(#s)"><rect x="8" y="8" width="112" height="112" rx="26" fill="url(#b)"/></g>
-<rect x="8.5" y="8.5" width="111" height="111" rx="25.5" fill="none" stroke="url(#r)"/>
-<path d="M42 30h30l16 16v48a4 4 0 0 1-4 4H42a4 4 0 0 1-4-4V34a4 4 0 0 1 4-4z" fill="#fff"/><path d="M72 30v12a4 4 0 0 0 4 4h12" fill="#f3b3ad"/><path d="M48 62h32" fill="none" stroke="#e0574b" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" opacity="1"/><path d="M48 72h28" fill="none" stroke="#e0574b" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" opacity="1"/><path d="M48 82h28" fill="none" stroke="#e0574b" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" opacity="1"/>
+<rect x="7" y="7" width="114" height="114" rx="27" fill="url(#t)"/>
+<rect x="7.500" y="7.500" width="113" height="113" rx="26.500" fill="none" stroke="url(#r)"/>
+<g transform="translate(28 28) scale(3)" fill="none" stroke="#f7f7f9" stroke-width="1.650" stroke-linecap="round" stroke-linejoin="round"><path d="M12 6.6C10 5.2 7.4 4.6 4 4.6v12.8c3.4 0 6 .6 8 2 2-1.4 4.600-2 8-2V4.6c-3.400 0-6 .6-8 2z" opacity="1"/><path d="M12 6.600v12.800" opacity="0.55"/></g>
 </svg>

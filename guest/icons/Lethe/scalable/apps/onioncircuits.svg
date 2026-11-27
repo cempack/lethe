@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+<defs>
+  <linearGradient id="t" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#494a51"/><stop offset="1" stop-color="#202125"/></linearGradient>
+  <linearGradient id="r" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity="0.32"/><stop offset="0.5" stop-color="#fff" stop-opacity="0.05"/><stop offset="1" stop-color="#fff" stop-opacity="0.02"/></linearGradient>
+  <linearGradient id="i" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffffff"/><stop offset="1" stop-color="#f7f7f9" stop-opacity="0.82"/></linearGradient>
+</defs>
+<rect x="7" y="7" width="114" height="114" rx="27" fill="url(#t)"/>
+<rect x="7.500" y="7.500" width="113" height="113" rx="26.500" fill="none" stroke="url(#r)"/>
+<g transform="translate(28 28) scale(3)" fill="none" stroke="#f7f7f9" stroke-width="1.650" stroke-linecap="round" stroke-linejoin="round"><path d="M10 5.5a2 2 0 1 0 4 0a2 2 0 1 0 -4 0zM3.5 17.5a2 2 0 1 0 4 0a2 2 0 1 0 -4 0zM16.5 17.5a2 2 0 1 0 4 0a2 2 0 1 0 -4 0z" opacity="1"/><path d="M10.9 7.2L6.6 15.8 M13.1 7.2l4.3 8.6 M7.5 17.5h9" opacity="0.55"/></g>
+</svg>

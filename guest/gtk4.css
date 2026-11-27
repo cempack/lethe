@@ -28,18 +28,3 @@ headerbar { min-height: 42px; box-shadow: none; border-bottom: 1px solid rgba(25
 button, entry, spinbutton, dropdown > button { border-radius: 9px; }
 .navigation-sidebar row, listview row, row.activatable { border-radius: 8px; }
 .card, list.boxed-list { border-radius: 12px; }
-
-/* Window buttons, macOS style: on the left (see setup.sh), as three small coloured circles.
-   The circle is painted on the centred icon, so header height does not stretch it; the
-   symbol inside stays transparent until the pointer is over the buttons. */
-windowcontrols { border-spacing: 8px; margin: 0 8px; }
-windowcontrols > button { background: none; box-shadow: none; min-width: 14px; min-height: 0; padding: 0; margin: 0; }
-windowcontrols > button:hover, windowcontrols > button:active { background: none; }
-windowcontrols > button > image { min-width: 13px; min-height: 13px; padding: 0; border-radius: 99px;
-                                  -gtk-icon-size: 9px; color: transparent;
-                                  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.18); }
-windowcontrols:hover > button > image { color: rgba(0, 0, 0, 0.6); }
-windowcontrols > button.close > image { background: #ff5f57; }
-windowcontrols > button.minimize > image { background: #febc2e; }
-windowcontrols > button.maximize > image { background: #28c840; }
-windowcontrols > button:backdrop > image { background: #4a4a4d; }

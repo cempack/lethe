@@ -1,0 +1,4 @@
+org.boum.tails.TorBrowser lethe-tor-browser
+unsafe-browser lethe-unsafe-browser
+org.boum.tails.AdditionalSoftware lethe-additional-software
+tails-about lethe-about

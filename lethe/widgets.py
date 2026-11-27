@@ -133,37 +133,21 @@ def clear(container):
         container.remove(child)
 
 
-def check_row(check, icon=None):
-    """A protection layer on one line: icon, name, value, status. Its explanation appears on hover,
-    and is spelled out underneath only when something needs attention."""
+def check_row(check, icon=None, explain=False):
+    """A protection layer on one line: icon, name, value, status. Its explanation is spelled out
+    underneath when asked for, or when something needs attention."""
     r = box(False, 14, css="row slim", tooltip_text=check.detail)
     r.append(image(icon or check.key, 20))
     text = box(spacing=3, hexpand=True, valign=Gtk.Align.CENTER)
     text.append(label(check.title, "headline"))
-    if check.state not in ("ok", "idle"):
-        text.append(label(check.detail, "caption", wrap=True, chars=36))
+    if explain or check.state not in ("ok", "idle"):
+        text.append(label(check.detail, "caption", wrap=True, chars=30))
     r.append(text)
     end = box(False, 9, valign=Gtk.Align.CENTER)
     end.append(label(check.value or "", "value"))
     end.append(dot(check.state))
     r.append(end)
     return r
-
-
-def tile(check):
-    """A protection layer as a small card: icon and status on top, name and value below.
-    Its explanation is the tooltip; the window spells out the ones that need attention."""
-    t = box(spacing=0, css="tile", tooltip_text=check.detail)
-    top = box(False, 0)
-    top.append(image(check.key, 20))
-    top.append(Gtk.Box(hexpand=True))
-    top.append(dot(check.state))
-    t.append(top)
-    for text, css, gap in ((check.title, "headline", 14), (check.value or "", "caption", 2)):
-        line = label(text, css)
-        line.set_ellipsize(Pango.EllipsizeMode.END)     # a tile never forces the window wider
-        t.append(margins(line, top=gap))
-    return t
 
 
 def setting_row(title, detail, control):
@@ -244,7 +228,7 @@ class Display(Gtk.Widget):
         super().__init__(focusable=True, hexpand=True, vexpand=True)
         self.add_css_class("vm")
         self.texture = self.control = None
-        self.on_paste = lambda: None
+        self.on_paste = self.on_fullscreen = lambda: None
         self.translator, self.scroll = keys.Translator(), 0.0
         self.hidden = Gdk.Cursor.new_from_name("none")       # until the VM hands us its pointer image
         self.set_cursor(self.hidden)
@@ -329,6 +313,9 @@ class Display(Gtk.Widget):
         both = Gdk.ModifierType.CONTROL_MASK | Gdk.ModifierType.ALT_MASK
         if down and keyval in (Gdk.KEY_v, Gdk.KEY_V) and state & both == both:
             self.on_paste()                                  # Ctrl+Alt+V: type this computer's text
+            return True
+        if down and keyval in (Gdk.KEY_f, Gdk.KEY_F) and state & both == both:
+            self.on_fullscreen()                             # Ctrl+Alt+F: full screen and back
             return True
         if self.control:
             name = Gdk.keyval_name(keyval) or ""

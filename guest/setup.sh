@@ -28,8 +28,7 @@ g org.gnome.desktop.interface color-scheme prefer-dark
 g org.gnome.desktop.interface gtk-theme Adwaita-dark
 g org.gnome.desktop.interface accent-color slate
 g org.gnome.desktop.interface clock-show-weekday true
-# Window buttons on the left, macOS order (restyled as coloured circles in gtk.css).
-g org.gnome.desktop.wm.preferences button-layout 'close,minimize,maximize:'
+g org.gnome.desktop.wm.preferences button-layout ':minimize,maximize,close'
 g org.gnome.desktop.interface enable-hot-corners true
 # The VM draws without a graphics card: animations only make it feel slow.
 g org.gnome.desktop.interface enable-animations false
@@ -51,20 +50,22 @@ S=$(cat "$D/scale.txt" 2>/dev/null)
 # Lethe's app icons, layered over the stock ones.
 [ -f "$D/icons.tar" ] && mkdir -p "$HOME/.local/share/icons" && tar -xf "$D/icons.tar" -C "$HOME/.local/share/icons" \
   && g org.gnome.desktop.interface icon-theme 'Lethe'
-# Two launchers name an icon file instead of an icon: point them at the theme.
+# Some launchers name an icon file instead of an icon: point a copy of each at the theme.
 mkdir -p "$HOME/.local/share/applications"
-for a in org.boum.tails.TorBrowser unsafe-browser; do
-  [ -f "/usr/share/applications/$a.desktop" ] && sed "s|^Icon=.*|Icon=$a|" "/usr/share/applications/$a.desktop" \
+while read -r a icon; do
+  [ -f "/usr/share/applications/$a.desktop" ] && sed "s|^Icon=.*|Icon=$icon|" "/usr/share/applications/$a.desktop" \
     > "$HOME/.local/share/applications/$a.desktop"
-done
+done < "$HOME/.local/share/icons/Lethe/launchers" 2>/dev/null
 # Lethe palette for every GTK app started from now on.
 mkdir -p "$HOME/.config/gtk-4.0" "$HOME/.config/gtk-3.0"
 cp "$D/gtk4.css" "$HOME/.config/gtk-4.0/gtk.css"
 cp "$D/gtk3.css" "$HOME/.config/gtk-3.0/gtk.css"
 # Title bars of older apps (Tor Connection, Tor Browser) are drawn by a helper that GNOME started
-# before this stylesheet existed. GNOME starts it again at once, now with the Lethe window buttons.
+# before this stylesheet existed. GNOME starts it again at once, now in the Lethe palette.
 pkill -u "$(id -u)" -x mutter-x11-frames 2>/dev/null
 g org.gnome.Console theme night
+g org.gnome.nautilus.window-state initial-size '(1080, 700)'
+g org.gnome.nautilus.icon-view default-zoom-level 'large'
 g org.gnome.TextEditor style-variant dark
 # Launcher favourites: what makes sense in a VM (no USB installer, no Persistent Storage).
 g org.gnome.shell favorite-apps "['org.boum.tails.TorBrowser.desktop', 'tca.desktop', 'org.gnome.Nautilus.desktop', 'org.gnome.Console.desktop', 'org.gnome.World.Secrets.desktop', 'thunderbird.desktop', 'tails-documentation.desktop']"
@@ -94,7 +95,9 @@ g org.gnome.desktop.search-providers disable-external true
 
 # Tor Browser starts at the "Safest" security level: no JavaScript on any site,
 # no remote fonts, media is click-to-play. Lower it from the shield icon if a
-# site you trust needs it.
+# site you trust needs it. The level is more than its one setting: the browser checks at start
+# that every setting the level controls already has the level's value, and asks to restart if
+# not. So all of them are written here, exactly as the browser itself writes them for "Safest".
 # Tails creates the profile at login; only touch it while the browser is closed.
 P="$HOME/.tor-browser/profile.default"
 [ -d "$P" ] || /usr/local/lib/generate-tor-browser-profile >/dev/null 2>&1
@@ -102,6 +105,15 @@ if [ -d "$P" ] && ! pgrep -f firefox.real >/dev/null; then
   cat >"$P/user.js" <<'EOF'
 user_pref("browser.security_level.security_slider", 1);
 user_pref("browser.security_level.security_custom", false);
+user_pref("javascript.options.ion", false);
+user_pref("javascript.options.baselinejit", false);
+user_pref("javascript.options.native_regexp", false);
+user_pref("javascript.options.asmjs", false);
+user_pref("javascript.options.wasm", true);
+user_pref("mathml.disabled", true);
+user_pref("svg.disabled", true);
+user_pref("gfx.font_rendering.graphite.enabled", false);
+user_pref("gfx.font_rendering.opentype_svg.enabled", false);
 EOF
 fi
 

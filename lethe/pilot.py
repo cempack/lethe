@@ -27,6 +27,7 @@ EXT = "lethe@lethe"
 LOADER = ("import('resource:///org/gnome/shell/ui/main.js').then(async M=>{let G=(await import('gi://Gio')).default,"
           f"m=M.extensionManager,u='{EXT}';if(!m.lookup(u))await m.loadExtension(m.createExtensionObject(u,"
           "G.File.new_for_path('/home/amnesia/.local/share/gnome-shell/extensions/'+u),2));m.enableExtension(u)})")
+DOCK = (30, 32, 38)               # the dock's background, as in guest/extension/stylesheet.css
 EDGES = [(0.004, 0.3), (0.004, 0.55), (0.004, 0.8), (0.996, 0.3), (0.996, 0.55), (0.996, 0.8)]
 
 
@@ -98,10 +99,19 @@ class Pilot(threading.Thread):
         """Tor Connection: "Connect to Tor automatically" (Alt+A), then Connect (Alt+C).
         Inside Tails, setup.sh swaps to an imperceptibly brighter copy of the wallpaper
         once Tor has bootstrapped: that change is the signal. Then the window is closed."""
+        self._settle(6 * slow)                     # the dock has just arrived; let the windows come to rest
         before = self._edge()
-        self.control.tap("alt", "a")
-        time.sleep(0.8 * slow)
-        self.control.tap("alt", "c")
+        for _ in range(3):
+            seen = self._look() and bytes(self.px[::4099])
+            self.control.tap("alt", "a")
+            time.sleep(0.8 * slow)
+            self.control.tap("alt", "c")
+            # The assistant turns to its progress page. If nothing moved, the keys went elsewhere:
+            # bring the window to the front (Alt+Esc) and press them again.
+            if self._wait(lambda: self._look() and bytes(self.px[::4099]) != seen, 4 * slow, 0.3):
+                break
+            self.control.tap("alt", "esc")
+            time.sleep(0.6 * slow)
         self.online = self._wait(lambda: max(abs(a - b) for a, b in zip(self._edge(), before)) >= 1.5, 180 * slow, 1)
         if self.online:
             time.sleep(1.5 * slow)                 # let the success page draw before closing it
@@ -187,16 +197,24 @@ class Pilot(threading.Thread):
         return False
 
     def _dock(self):
-        """The Lethe dock: a row of coloured app icons along the bottom middle of the screen."""
+        """The Lethe dock: a bar of its own graphite (see stylesheet.css), centred along the bottom.
+        Its top padding is one unbroken run of that colour, narrower than the screen."""
         if not self._look():
             return False
-        colourful = 0
-        for y in range(self.h - 100, self.h - 15, 5):
-            for x in range(int(self.w * 0.3), int(self.w * 0.7), 4):
-                o = (y * self.w + x) * 4
-                b, g, r = self.px[o], self.px[o + 1], self.px[o + 2]
-                colourful += max(r, g, b) > 150 and max(r, g, b) - min(r, g, b) > 90
-        return colourful > 40
+        w, px, mid = self.w, self.px, self.w // 2
+        match = lambda o: abs(px[o] - DOCK[2]) <= 3 and abs(px[o + 1] - DOCK[1]) <= 3 and abs(px[o + 2] - DOCK[0]) <= 3
+        for y in range(self.h - 170, self.h - 12, 2):
+            row = y * w * 4
+            if not match(row + mid * 4):
+                continue
+            left = right = mid
+            while left > 0 and match(row + (left - 1) * 4):
+                left -= 1
+            while right < w - 1 and match(row + (right + 1) * 4):
+                right += 1
+            if 200 <= right - left <= 0.9 * w and abs((left + right) // 2 - mid) <= 12:
+                return True
+        return False
 
     def _desktop_bar(self):
         return self._look() and max(self._at(0.3, 0.008)) < 60

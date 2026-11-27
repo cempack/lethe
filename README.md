@@ -17,8 +17,8 @@ lethe doctor      # audit every protection layer on this machine
 3. Lethe passes the Tails Welcome Screen for you (English, US keyboard, the defaults most Tails users have), applies stricter settings and the Lethe appearance, and connects to Tor automatically (can be turned off in Preferences, e.g. to use bridges). It does this by pressing keys, like a person: the image stays byte-for-byte the signed original.
 4. Your keyboard layout is translated as you type, so an AZERTY `a` is still an `a`.
 5. **Clipboard, one way.** Copy text or an image on your computer, come back to the session and paste: it is already on Tails' clipboard. What a password manager copies is never shared (they mark it, and Lethe honours the mark). Lethe hands it over on a small read-only disc that the Lethe desktop reads; nothing copied in Tails ever leaves it. **Ctrl+Alt+V** types your clipboard's text instead, for places the clipboard cannot reach (the Welcome Screen). Turn sharing off under Session.
-6. **The Lethe desktop** inside Tails: a macOS-style dock (favourites, running apps, the app grid), a slim menu bar with the active app's name and the clock on the right, window buttons as coloured circles, Lethe's own icons and a dusk wallpaper. It is a GNOME Shell extension that Lethe copies in and loads through Looking Glass right after login; the extension then switches Looking Glass off for the rest of the session.
-7. Tails runs at your screen's real resolution and follows the window as you resize it; text is scaled to match your screen.
+6. **The Lethe desktop** inside Tails: GNOME's own dock kept on the desktop (drag to reorder, right-click menus, running dots), Lethe's icon set for every app and folder, a graphite palette and a dusk wallpaper. It is a GNOME Shell extension that Lethe copies in and loads through Looking Glass right after login; the extension then switches Looking Glass off for the rest of the session.
+7. The session has a window of its own. Tails runs at your screen's real resolution and follows that window as you resize it; text is scaled to match your screen. **Ctrl+Alt+F** switches to full screen and back; in full screen nothing of Lethe is drawn over Tails.
 8. When the session ends, its memory is overwritten with zeros.
 
 ## Protection
@@ -43,7 +43,7 @@ lethe doctor      # audit every protection layer on this machine
 
 ## Notes
 
-- Tor Browser starts at the Safest level. On first launch it asks once to restart to finish applying it.
+- Tor Browser starts at the Safest level.
 - Without hardware virtualisation Lethe still works, in slow software emulation.
 - On mains power Lethe holds the "performance" power profile while a session runs, and releases it afterwards.
 - Settings live in `~/.config/lethe/settings.json`. Uninstall with `./install.sh --uninstall`.

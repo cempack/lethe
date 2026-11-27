@@ -1,10 +1,10 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
 <defs>
-  <linearGradient id="b" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#38383d"/><stop offset="1" stop-color="#0f0f11"/></linearGradient>
-  <linearGradient id="r" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity="0.2"/><stop offset="0.5" stop-color="#fff" stop-opacity="0.03"/><stop offset="1" stop-color="#000" stop-opacity="0.18"/></linearGradient>
-  <filter id="s" x="-10%" y="-10%" width="120%" height="130%"><feDropShadow dx="0" dy="2" stdDeviation="2.2" flood-color="#000" flood-opacity="0.35"/></filter>
+  <linearGradient id="t" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#494a51"/><stop offset="1" stop-color="#202125"/></linearGradient>
+  <linearGradient id="r" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity="0.32"/><stop offset="0.5" stop-color="#fff" stop-opacity="0.05"/><stop offset="1" stop-color="#fff" stop-opacity="0.02"/></linearGradient>
+  <linearGradient id="i" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffffff"/><stop offset="1" stop-color="#f7f7f9" stop-opacity="0.82"/></linearGradient>
 </defs>
-<g filter="url(#s)"><rect x="8" y="8" width="112" height="112" rx="26" fill="url(#b)"/></g>
-<rect x="8.5" y="8.5" width="111" height="111" rx="25.5" fill="none" stroke="url(#r)"/>
-<path d="M28 72h14l8-20 12 36 10-26 8 10h20" fill="none" stroke="#30d158" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" opacity="1"/>
+<rect x="7" y="7" width="114" height="114" rx="27" fill="url(#t)"/>
+<rect x="7.500" y="7.500" width="113" height="113" rx="26.500" fill="none" stroke="url(#r)"/>
+<g transform="translate(28 28) scale(3)" fill="none" stroke="#f7f7f9" stroke-width="1.650" stroke-linecap="round" stroke-linejoin="round"><path d="M3.500 12.500h3.800l2.400-6.500 4.200 12.500 2.500-6h4.100" opacity="1"/></g>
 </svg>
