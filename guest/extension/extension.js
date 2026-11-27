@@ -9,6 +9,7 @@
 // Loaded by Lethe right after login and gone when the session ends, like everything in Tails.
 import Clutter from 'gi://Clutter';
 import Gio from 'gi://Gio';
+import GObject from 'gi://GObject';
 import GLib from 'gi://GLib';
 import Shell from 'gi://Shell';
 import St from 'gi://St';
@@ -21,11 +22,48 @@ const CLIP_LABEL = 'LETHECLIP';
 const MAX_CLIP = 32 * 1024 * 1024;
 
 // The dock is GNOME's own dash (the one in the overview), shown on the desktop as well. Everything
-// in it is GNOME's: dragging to reorder, right-click menus, running dots, labels, keyboard focus.
+// in it is GNOME's: dragging to reorder, right-click menus, running marks, labels, keyboard focus.
+// Two things differ: its icons have one fixed size, matched to the screen's scale (the stock dash
+// only knows 48 and 64), and the button for the app grid is drawn as a tile like the apps.
+const LetheDash = GObject.registerClass(
+class LetheDash extends Dash {
+    _init(size, gridIcon) {
+        this._size = size;
+        super._init();
+        this.iconSize = size;
+        const grid = this._showAppsIcon.icon;
+        grid.createIcon = s => new St.Icon({gicon: gridIcon, icon_size: s, style_class: 'show-apps-icon', track_hover: true});
+        grid.setIconSize(1);        // drop the stock symbol...
+        grid.setIconSize(size);     // ...and draw ours
+    }
+
+    resize(size) {
+        if (size !== this._size) {
+            this._size = size;
+            this._adjustIconSize();
+        }
+    }
+
+    _adjustIconSize() {
+        const icons = this._box.get_children()
+            .filter(actor => actor.child?._delegate?.icon && !actor.animatingOut)
+            .map(actor => actor.child._delegate.icon);
+        icons.push(this._showAppsIcon.icon);
+        for (const icon of icons)
+            icon.setIconSize(this._size);
+        if (this._separator)
+            this._separator.height = this._size;
+        if (this.iconSize !== this._size) {
+            this.iconSize = this._size;
+            this.emit('icon-size-changed');
+        }
+    }
+});
+
 class Dock {
-    constructor(scale) {
-        this._icon = scale >= 1.2 ? 64 : 48;
-        this._dash = new Dash();
+    constructor(scale, dir) {
+        this._scale = scale;
+        this._dash = new LetheDash(this._size(), Gio.icon_new_for_string(dir.get_child('apps.svg').get_path()));
         this._dash.add_style_class_name('lethe-dock');
         this._dash.showAppsButton.connectObject('notify::checked', button => {
             if (button.checked)
@@ -48,12 +86,19 @@ class Dock {
         this._place();
     }
 
+    // 48 px at the screen's scale, less when the session window is narrow: the dock never takes
+    // more than its share of a small screen.
+    _size() {
+        const m = Main.layoutManager.primaryMonitor;
+        const fit = m ? m.width / 20 : Infinity;
+        return Math.round(Math.max(32, Math.min(48 * this._scale, fit)) / 2) * 2;
+    }
+
     _place() {
         const m = Main.layoutManager.primaryMonitor;
         if (!m)
             return;
-        // The dash picks the largest of its icon sizes that fits the height it is given.
-        this._dash.setMaxSize(Math.round(m.width * 0.92), this._icon + 56);
+        this._dash.resize(this._size());
         const [, height] = this._dash.get_preferred_height(-1);
         this.actor.set_position(m.x, m.y + m.height - height);
         this.actor.set_size(m.width, height);
@@ -158,7 +203,16 @@ export default class LetheExtension extends Extension {
     enable() {
         Main.layoutManager.uiGroup.add_style_class_name('lethe');
         const scale = new Gio.Settings({schema_id: 'org.gnome.desktop.interface'}).get_double('text-scaling-factor');
-        this._dock = new Dock(scale);
+        // The Inter typeface was installed after GNOME started, so GNOME has not seen it and draws
+        // its own text in another face than the apps. Hand it the file, then restyle.
+        try {
+            const font = GLib.build_filenamev([GLib.get_home_dir(), '.local/share/fonts/Inter.ttf']);
+            if (Main.panel.get_pango_context().get_font_map().add_font_file(font))
+                Main.loadTheme();
+        } catch (e) {
+            console.warn(`Lethe fonts: ${e.message}`);
+        }
+        this._dock = new Dock(scale, this.dir);
         this._bar = new TopBar(this.dir);
         this._clipboard = new Clipboard();
         this._refreshAppGrid();

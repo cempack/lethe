@@ -1,18 +1,34 @@
-/* Lethe for GNOME Shell. GNOME's own shapes and sizes, in Lethe's graphite. */
+/* Lethe for GNOME Shell. GNOME's own pieces, in Lethe's graphite. Sizes are in em so that they
+   follow the text size Lethe sets for the screen's scale. */
 
-/* Top bar: see-through over the wallpaper instead of a black band. */
-.lethe #panel { background-color: rgba(11, 11, 12, 0.72); }
-.lethe #panel .lethe-mark { -natural-hpadding: 10px; -minimum-hpadding: 6px; }
-.lethe #panel .lethe-app-name { font-weight: bold; padding: 0 6px 0 2px; color: #f5f5f7; }
+/* Top bar: no band. Its text rests directly on the dark upper sky of the wallpaper. */
+.lethe #panel { background-color: rgba(8, 9, 12, 0.35); font-weight: 500; }
+.lethe #panel .panel-button { font-weight: 500; color: rgba(245, 245, 247, 0.92); border-radius: 0.6em;
+                              -natural-hpadding: 0.7em; -minimum-hpadding: 0.4em; }
+.lethe #panel .panel-button:hover, .lethe #panel .panel-button:focus { box-shadow: inset 0 0 0 100px rgba(255, 255, 255, 0.10); }
+.lethe #panel .panel-button:active, .lethe #panel .panel-button:checked { box-shadow: inset 0 0 0 100px rgba(255, 255, 255, 0.16); }
+.lethe #panel .lethe-mark { -natural-hpadding: 0.55em; -minimum-hpadding: 0.4em; margin-left: 0.3em; }
+.lethe #panel .lethe-app-name { font-weight: 600; padding: 0 0.5em 0 0.15em; color: #f5f5f7; }
+.lethe #panel .clock-display .clock { font-weight: 500; }
 
-/* Dock: the dash, resting on the desktop. One solid graphite surface with a hairline of light. */
-.lethe-dock .dash-background { background-color: #1e2026; border: 1px solid rgba(255, 255, 255, 0.09);
-                               box-shadow: 0 10px 28px rgba(0, 0, 0, 0.5); margin-bottom: 10px; }
-.lethe-dock .dash-separator { margin-bottom: 10px; }
+/* Dock: the dash, resting on the desktop. One graphite surface with a hairline of light.
+   (The autopilot recognises this exact background colour: keep it in step with pilot.DOCK.) */
+.lethe-dock .dash-background { background-color: #1e2026; border: 1px solid rgba(255, 255, 255, 0.10);
+                               border-radius: 1.45em; padding: 0.5em 0.5em; margin-bottom: 0.5em;
+                               box-shadow: 0 0.5em 1.6em rgba(0, 0, 0, 0.45); }
+.lethe-dock .dash-separator { margin: 0 0.35em 0.5em; background-color: rgba(255, 255, 255, 0.12); }
+.lethe-dock .dash-item-container .show-apps,
+.lethe-dock .dash-item-container .overview-tile { margin: 0 0.06em; padding-bottom: 0.5em; }
 .lethe-dock .dash-item-container .show-apps .overview-icon,
-.lethe-dock .dash-item-container .overview-tile .overview-icon { background-color: transparent; }
+.lethe-dock .dash-item-container .overview-tile .overview-icon { background-color: transparent; padding: 0.22em;
+                                                                 border-radius: 1.05em; transition-duration: 120ms; }
 .lethe-dock .dash-item-container .show-apps:hover .overview-icon,
-.lethe-dock .dash-item-container .overview-tile:hover .overview-icon { background-color: rgba(255, 255, 255, 0.08); }
+.lethe-dock .dash-item-container .overview-tile:hover .overview-icon { background-color: rgba(255, 255, 255, 0.09); }
 .lethe-dock .dash-item-container .show-apps:active .overview-icon,
 .lethe-dock .dash-item-container .show-apps:checked .overview-icon,
-.lethe-dock .dash-item-container .overview-tile:active .overview-icon { background-color: rgba(255, 255, 255, 0.13); }
+.lethe-dock .dash-item-container .overview-tile:active .overview-icon { background-color: rgba(255, 255, 255, 0.15); }
+/* A running app is underlined, not dotted. */
+.lethe-dock .dash-item-container .app-grid-running-dot { width: 0.8em; height: 0.2em; border-radius: 0.1em;
+                                                         background-color: rgba(245, 245, 247, 0.85); offset-y: -0.42em; }
+.lethe .dash-label { background-color: #1e2026; border: 1px solid rgba(255, 255, 255, 0.10); border-radius: 0.6em;
+                     padding: 0.35em 0.75em; font-weight: 500; -y-offset: 0.5em; }

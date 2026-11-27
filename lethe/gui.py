@@ -17,7 +17,7 @@ from . import core, dbusdisplay, pilot, rfb, sentinel
 APP_ID = "org.lethe.App"
 INSTALLED = os.path.exists("/etc/systemd/system/lethe-vpn.service")
 SIZE = (420, 640)  # the launcher
-BAR = 40           # height of the session bar
+BAR = 36           # height of the session bar
 
 PASTE_LIMIT = 2000             # Ctrl+Alt+V types text, for where the clipboard cannot reach
 CLIP_LIMIT = 32 << 20          # the largest thing shared with Tails' clipboard
@@ -468,38 +468,37 @@ class Window(Gtk.ApplicationWindow):
 
     def _live(self):
         page = box()
-        # A window title bar, macOS style: identity on the left, one status capsule truly centred,
-        # tools and the one destructive action on the right.
+        # One quiet line of window chrome: what this is and for how long, how it is protected,
+        # and the two things you can do. It folds as the window narrows (see _fold).
         bar = self.bar = Gtk.CenterBox(css_classes=["bar"], height_request=BAR)
         start = box(False, 8, valign=Gtk.Align.CENTER)
         start.append(image("lethe", 16))
-        start.append(label("Lethe", "bar-title"))
-        start.append(label("·", "bar-faint"))
+        self.bar_title = label("Private Session", "bar-title")
+        start.append(self.bar_title)
         self.clock = label("00:00", "bar-clock")
         self.clock.set_tooltip_text("Time in this session")
         start.append(self.clock)
         bar.set_start_widget(start)
 
-        self.capsule = box(False, 0, css="capsule", valign=Gtk.Align.CENTER)
+        self.capsule = box(False, 16, valign=Gtk.Align.CENTER)
         self.state_dot = dot("ok")
-        self.capsule.append(margins(self.state_dot, end=9))
+        self.capsule.append(self.state_dot)
         self.bar_facts = {}
-        for i, (key, icon) in enumerate((("net", "isolation"), ("tor", "network"), ("sentinel", "sentinel"))):
-            if i:
-                self.capsule.append(Gtk.Separator(orientation=Gtk.Orientation.VERTICAL))
+        for key, icon in (("net", "isolation"), ("tor", "network"), ("sentinel", "sentinel")):
             item = box(False, 6, css="fact")
             item.append(image(icon, 14))
             text = label("", "fact-text")
-            text.set_ellipsize(Pango.EllipsizeMode.END)
             item.append(text)
             self.capsule.append(item)
             self.bar_facts[key] = (item, text)
         bar.set_center_widget(self.capsule)
 
-        end = box(False, 4, valign=Gtk.Align.CENTER)
+        end = box(False, 6, valign=Gtk.Align.CENTER)
         end.append(icon_button("fullscreen", "Full Screen (Ctrl+Alt+F)", self._toggle_fullscreen))
-        end.append(margins(button("End Session", "end", lambda: self.destroy_session("You ended the session")), start=8))
+        self.end_session = button("End Session", "end", lambda: self.destroy_session("You ended the session"))
+        end.append(self.end_session)
         bar.set_end_widget(end)
+        self.folded = None
         page.append(bar)
         self.alert = Gtk.Revealer(transition_type=Gtk.RevealerTransitionType.SLIDE_DOWN)
         self.alert_text = label("", "banner", wrap=True, chars=80)
@@ -661,6 +660,7 @@ class Window(Gtk.ApplicationWindow):
 
     def _frame(self, *_):
         """Once per display refresh of the session window: the VM's size and picture follow it."""
+        self._fold(self.viewer.get_width())
         if self.pending is not None:
             self.ticks += 1
             if self.ticks >= 6 and self.vstack.get_width() > 0:        # the window has settled at its size
@@ -692,6 +692,16 @@ class Window(Gtk.ApplicationWindow):
                 self.display.show_pointer(*screen.cursor[1:])
         self.meter.tick(vm=screen.frames, shown=self.display.shown)
         return True
+
+    def _fold(self, width):
+        """The session bar at any width: first the status loses its words, then the rest does."""
+        folded = 2 if width < 560 else 1 if width < 860 else 0
+        if width and folded != self.folded:
+            self.folded = folded
+            for _item, text in self.bar_facts.values():
+                text.set_visible(folded == 0)
+            self.bar_title.set_visible(folded < 2)
+            self.end_session.set_label("End" if folded == 2 else "End Session")
 
     def _tick(self):
         if self.session and self.session.started:

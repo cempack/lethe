@@ -58,10 +58,6 @@ button.quiet:hover { background: rgba(255, 255, 255, 0.11); }
 button.ghost { background: none; color: rgba(245, 245, 247, 0.62); font-weight: 500; font-size: 13.5px;
                border-radius: 99px; padding: 7px 12px 7px 8px; }
 button.ghost:hover { background: rgba(255, 255, 255, 0.06); color: #f5f5f7; }
-button.end { background: rgba(255, 69, 58, 0.14); color: #ff6961; font-weight: 600; font-size: 12.5px;
-             border-radius: 7px; padding: 5px 12px; }
-button.end:hover { background: #ff453a; color: #ffffff; }
-button.end:active { background: #d93a30; color: #ffffff; }
 button.iconic { background: none; border-radius: 99px; padding: 6px; }
 button.iconic:hover { background: rgba(255, 255, 255, 0.08); }
 
@@ -102,24 +98,22 @@ button.status-row:hover { background: rgba(255, 255, 255, 0.075); }
 .group-title { font-size: 12.5px; font-weight: 600; color: rgba(245, 245, 247, 0.55); }
 
 /* ── live session ─────────────────────────────────────────────────────────── */
-/* The session bar is window chrome: a lifted graphite surface with a hairline under it, like a
-   macOS title bar, so the black of the VM reads as content below it. */
-.bar { background: linear-gradient(180deg, #1d1d20, #18181b); border-bottom: 1px solid rgba(0, 0, 0, 0.6);
-       box-shadow: 0 1px 0 rgba(255, 255, 255, 0.045) inset; padding: 0 8px 0 14px; }
-.bar-title { font-size: 13px; font-weight: 600; letter-spacing: -0.1px; }
-.bar-faint { color: rgba(245, 245, 247, 0.22); }
-.bar-clock { font-size: 13px; font-weight: 500; font-feature-settings: "tnum"; color: rgba(245, 245, 247, 0.55); }
-.capsule { background: rgba(255, 255, 255, 0.055); border: 1px solid rgba(255, 255, 255, 0.07); border-radius: 99px;
-           padding: 4px 6px 4px 12px; }
-.capsule separator { background: rgba(255, 255, 255, 0.10); min-width: 1px; margin: 5px 2px; }
-.fact { padding: 1px 8px; }
-.fact-text { font-size: 12px; font-weight: 500; color: rgba(245, 245, 247, 0.80); }
-.fact .icon { opacity: 0.62; }
-.fact.off .fact-text { color: rgba(245, 245, 247, 0.38); }
-.fact.off .icon { opacity: 0.28; }
-.bar button.iconic { border-radius: 7px; padding: 5px; }
-.bar button.iconic .icon { opacity: 0.66; }
+/* The session bar: one flat line of graphite with a hairline under it. No capsule, no gradient;
+   colour only in the status dot, and in "End Session" when the pointer is on it. */
+.bar { background: #111113; border-bottom: 1px solid rgba(255, 255, 255, 0.07); padding: 0 8px 0 13px; }
+.bar-title { font-size: 12.5px; font-weight: 600; letter-spacing: -0.1px; }
+.bar-clock { font-size: 12.5px; font-weight: 500; font-feature-settings: "tnum"; color: rgba(245, 245, 247, 0.45); }
+.fact-text { font-size: 12px; font-weight: 500; color: rgba(245, 245, 247, 0.72); }
+.fact .icon { opacity: 0.55; }
+.fact.off .fact-text { color: rgba(245, 245, 247, 0.34); }
+.fact.off .icon { opacity: 0.26; }
+.bar button.iconic { border-radius: 8px; padding: 5px; }
+.bar button.iconic .icon { opacity: 0.6; }
 .bar button.iconic:hover .icon { opacity: 1; }
+button.end { background: rgba(255, 255, 255, 0.075); color: rgba(245, 245, 247, 0.92); font-weight: 600; font-size: 12px;
+             border-radius: 8px; padding: 4px 11px; }
+button.end:hover { background: #ff453a; color: #ffffff; }
+button.end:active { background: #d93a30; color: #ffffff; }
 .banner { background: #241b0b; color: #f6c97f; padding: 9px 16px; font-size: 13px; }
 .vm, .curtain { background: #000000; }
 

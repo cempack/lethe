@@ -460,7 +460,8 @@ class Session:
                      "WALL.PNG": "assets/wallpaper.png",
                      "ONLINE.PNG": "assets/wallpaper-online.png", "INTER.TTF": "assets/Inter.ttf",
                      "EXT.JS": "guest/extension/extension.js", "EXT.CSS": "guest/extension/stylesheet.css",
-                     "EXT.JSN": "guest/extension/metadata.json", "MARK.SVG": "guest/extension/mark.svg"}
+                     "EXT.JSN": "guest/extension/metadata.json", "MARK.SVG": "guest/extension/mark.svg",
+                     "APPS.SVG": "guest/icons/Lethe/scalable/apps/lethe-apps.svg"}
             data = {n: open(os.path.join(LIB, p), "rb").read() for n, p in files.items()
                     if os.path.exists(os.path.join(LIB, p))}
             data["ICONS.TAR"] = _tar(os.path.join(LIB, "guest", "icons"))

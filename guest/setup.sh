@@ -28,6 +28,8 @@ g org.gnome.desktop.interface color-scheme prefer-dark
 g org.gnome.desktop.interface gtk-theme Adwaita-dark
 g org.gnome.desktop.interface accent-color slate
 g org.gnome.desktop.interface clock-show-weekday true
+# The accessibility menu stays in Settings; it does not need a permanent place in the top bar.
+g org.gnome.desktop.a11y always-show-universal-access-status false
 g org.gnome.desktop.wm.preferences button-layout ':minimize,maximize,close'
 g org.gnome.desktop.interface enable-hot-corners true
 # The VM draws without a graphics card: animations only make it feel slow.
@@ -44,6 +46,7 @@ cp "$D/ext.js" "$X/extension.js"
 cp "$D/ext.css" "$X/stylesheet.css"
 cp "$D/ext.jsn" "$X/metadata.json"
 cp "$D/mark.svg" "$X/mark.svg"
+cp "$D/apps.svg" "$X/apps.svg"
 # Text at the size you are used to: Lethe shows Tails pixel for pixel, at your screen's scale.
 S=$(cat "$D/scale.txt" 2>/dev/null)
 [ -n "$S" ] && g org.gnome.desktop.interface text-scaling-factor "$S"
@@ -68,7 +71,7 @@ g org.gnome.nautilus.window-state initial-size '(1080, 700)'
 g org.gnome.nautilus.icon-view default-zoom-level 'large'
 g org.gnome.TextEditor style-variant dark
 # Launcher favourites: what makes sense in a VM (no USB installer, no Persistent Storage).
-g org.gnome.shell favorite-apps "['org.boum.tails.TorBrowser.desktop', 'tca.desktop', 'org.gnome.Nautilus.desktop', 'org.gnome.Console.desktop', 'org.gnome.World.Secrets.desktop', 'thunderbird.desktop', 'tails-documentation.desktop']"
+g org.gnome.shell favorite-apps "['org.boum.tails.TorBrowser.desktop', 'tca.desktop', 'org.gnome.Nautilus.desktop', 'org.gnome.Console.desktop', 'org.gnome.World.Secrets.desktop', 'org.gnome.TextEditor.desktop', 'tails-documentation.desktop']"
 
 # Keep no history of what was opened or used.
 g org.gnome.desktop.privacy remember-recent-files false

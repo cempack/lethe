@@ -1,10 +1,10 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
 <defs>
   <linearGradient id="t" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#494a51"/><stop offset="1" stop-color="#202125"/></linearGradient>
-  <linearGradient id="r" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity="0.32"/><stop offset="0.5" stop-color="#fff" stop-opacity="0.05"/><stop offset="1" stop-color="#fff" stop-opacity="0.02"/></linearGradient>
-  <linearGradient id="i" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffffff"/><stop offset="1" stop-color="#f7f7f9" stop-opacity="0.82"/></linearGradient>
+  <linearGradient id="r" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity="0.30"/><stop offset="0.5" stop-color="#fff" stop-opacity="0.05"/><stop offset="1" stop-color="#fff" stop-opacity="0.02"/></linearGradient>
+  <linearGradient id="i" gradientUnits="userSpaceOnUse" x1="0" y1="3" x2="0" y2="21"><stop offset="0" stop-color="#f1f2f6"/><stop offset="1" stop-color="#dfe3ea"/></linearGradient>
 </defs>
 <rect x="7" y="7" width="114" height="114" rx="27" fill="url(#t)"/>
 <rect x="7.500" y="7.500" width="113" height="113" rx="26.500" fill="none" stroke="url(#r)"/>
-<g transform="translate(28 28) scale(3)" fill="none" stroke="#f7f7f9" stroke-width="1.650" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6.500h8.800 M17.200 6.500H20 M12.9 6.5a2.1 2.1 0 1 0 4.2 0a2.1 2.1 0 1 0 -4.2 0z M4 17.500h2.800 M11.200 17.500H20 M6.9 17.5a2.1 2.1 0 1 0 4.2 0a2.1 2.1 0 1 0 -4.2 0z" opacity="1"/><path d="M4 12h16" opacity="0.5"/></g>
+<g transform="translate(28 28) scale(3)" fill="none" stroke="url(#i)" stroke-width="1.700" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6.500h8.800 M17.200 6.500H20 M12.9 6.5a2.1 2.1 0 1 0 4.2 0a2.1 2.1 0 1 0 -4.2 0z M4 17.500h2.800 M11.200 17.500H20 M6.9 17.5a2.1 2.1 0 1 0 4.2 0a2.1 2.1 0 1 0 -4.2 0z" opacity="1"/><path d="M4 12h16" opacity="0.5"/></g>
 </svg>

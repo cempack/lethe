@@ -2,10 +2,11 @@
 """Draws Lethe's icon theme for Tails into guest/icons/Lethe.
 
 One language for every app, the one the Lethe mark already speaks: a graphite
-tile with a hairline of light along its top edge, and a single white line
-drawing on it. No colour, except where it warns (the Unsafe Browser).
-Glyphs are drawn on a 24-unit grid with a 1.6-unit round stroke; a second,
-fainter layer gives them depth. Folders are brushed steel, with their purpose
+tile with a hairline of light along its top edge, and a single line drawing on
+it. Each app draws in its own colour, and that colour is breathed faintly into
+its tile: the set stays one family in the dark, and every app can still be
+found by colour alone. Glyphs are drawn on a 24-unit grid with a round stroke;
+a second, fainter layer gives them depth. Folders are brushed steel, with their purpose
 engraved.
 
 Run it after changing a drawing; the SVGs it writes are what ships.
@@ -100,7 +101,24 @@ APPS = {
     "tails-backup": ["M4.500 12a7.500 7.500 0 0 1 12.900-5.200L19.500 9 M19.500 4.500V9H15", ("M19.500 12a7.500 7.500 0 0 1-12.900 5.200L4.500 15 M4.500 19.500V15H9", 0.6)],
     "tails-installer": [R(7, 9.500, 10, 11, 2.500), "M9.500 9.500v-6h5v6", (dots((11, 6.300), (13, 6.300)) + " M10 14.500h4", 0.7)],
 }
-WARN = {"lethe-unsafe-browser"}
+APPS["lethe-apps"] = ["".join(C(x, y, 0.550) for y in (7, 12, 17) for x in (7, 12, 17))]   # the dock's grid button
+
+# The palette: nine inks, all of one lightness, chosen to sit on graphite without shouting.
+INK = {"violet": "#a996ff", "blue": "#6fa8ff", "sky": "#62c6f2", "teal": "#54d1b6", "green": "#74d98a",
+       "amber": "#f3c35a", "orange": "#ff9f62", "rose": "#ff86ab", "red": "#ff6f66", "silver": "#dfe3ea"}
+COLOUR = {
+    "violet": ["lethe-tor-browser", "onioncircuits", "gimp", "tails-persistent-storage"],
+    "blue": ["org.gnome.Nautilus", "libreoffice-writer", "org.gnome.Software", "kleopatra"],
+    "sky": ["thunderbird", "org.gnome.Yelp", "org.gnome.SoundJuicer", "synaptic", "tails-installer"],
+    "teal": ["tor-connection", "org.gnome.Loupe", "org.inkscape.Inkscape", "tails-backup", "org.gnome.Shell.Extensions"],
+    "green": ["org.gnome.World.Secrets", "pidgin", "libreoffice-calc", "gvim", "org.gnome.SystemMonitor"],
+    "amber": ["org.gnome.TextEditor", "electrum", "org.gnome.FileRoller", "libreoffice-draw", "unlock-veracrypt-volumes",
+              "lethe-additional-software"],
+    "orange": ["whisperback", "bookletimposer", "libreoffice-impress", "audacity", "brasero", "org.gnome.Calculator"],
+    "rose": ["org.gnome.Evince", "fr.romainvigier.MetadataCleaner", "io.github.celluloid_player.Celluloid", "org.onionshare.OnionShare"],
+    "red": ["lethe-unsafe-browser", "org.gnome.SoundRecorder"],
+}
+INK_OF = {app: ink for ink, apps in COLOUR.items() for app in apps}       # everything else draws in silver
 
 # Launchers whose icon is a file path or a generic name: setup.sh points a copy of each at these.
 # (Icons named like "tails-backup.svg" need nothing: that is looked up as "tails-backup".)
@@ -108,8 +126,16 @@ LAUNCHERS = {"org.boum.tails.TorBrowser": "lethe-tor-browser", "unsafe-browser":
              "org.boum.tails.AdditionalSoftware": "lethe-additional-software", "tails-about": "lethe-about"}
 
 
-def tile(layers, warn=False):
-    top, bottom, ink = ("#6a2f2f", "#321617", "#ffe6e3") if warn else ("#494a51", "#202125", "#f7f7f9")
+def mix(a, b, t):
+    """Colour `a` moved a fraction `t` of the way to colour `b`."""
+    pa, pb = (int(a[i:i + 2], 16) for i in (1, 3, 5)), (int(b[i:i + 2], 16) for i in (1, 3, 5))
+    return "#" + "".join(f"{round(x + (y - x) * t):02x}" for x, y in zip(pa, pb))
+
+
+def tile(layers, ink="silver"):
+    hue = INK[ink]
+    tint = 0.30 if ink == "red" else 0.0 if ink == "silver" else 0.15
+    top, bottom = mix("#494a51", hue, tint), mix("#202125", hue, tint * 0.7)
     glyph = ""
     for layer in layers:
         d, opacity = layer if isinstance(layer, tuple) else (layer, 1)
@@ -117,12 +143,12 @@ def tile(layers, warn=False):
     return f"""<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
 <defs>
   <linearGradient id="t" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="{top}"/><stop offset="1" stop-color="{bottom}"/></linearGradient>
-  <linearGradient id="r" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity="0.32"/><stop offset="0.5" stop-color="#fff" stop-opacity="0.05"/><stop offset="1" stop-color="#fff" stop-opacity="0.02"/></linearGradient>
-  <linearGradient id="i" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffffff"/><stop offset="1" stop-color="{ink}" stop-opacity="0.82"/></linearGradient>
+  <linearGradient id="r" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity="0.30"/><stop offset="0.5" stop-color="#fff" stop-opacity="0.05"/><stop offset="1" stop-color="#fff" stop-opacity="0.02"/></linearGradient>
+  <linearGradient id="i" gradientUnits="userSpaceOnUse" x1="0" y1="3" x2="0" y2="21"><stop offset="0" stop-color="{mix(hue, '#ffffff', 0.55)}"/><stop offset="1" stop-color="{hue}"/></linearGradient>
 </defs>
 <rect x="7" y="7" width="114" height="114" rx="27" fill="url(#t)"/>
 <rect x="7.500" y="7.500" width="113" height="113" rx="26.500" fill="none" stroke="url(#r)"/>
-<g transform="translate(28 28) scale(3)" fill="none" stroke="{ink}" stroke-width="1.650" stroke-linecap="round" stroke-linejoin="round">{glyph}</g>
+<g transform="translate(28 28) scale(3)" fill="none" stroke="url(#i)" stroke-width="1.700" stroke-linecap="round" stroke-linejoin="round">{glyph}</g>
 </svg>
 """
 
@@ -130,14 +156,14 @@ def tile(layers, warn=False):
 def folder(engraving=""):
     return f"""<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
 <defs>
-  <linearGradient id="b" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#5d6474"/><stop offset="1" stop-color="#4a5060"/></linearGradient>
-  <linearGradient id="f" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#9aa2b6"/><stop offset="1" stop-color="#666e83"/></linearGradient>
+  <linearGradient id="b" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#566587"/><stop offset="1" stop-color="#45526f"/></linearGradient>
+  <linearGradient id="f" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#8fa3cc"/><stop offset="1" stop-color="#5b6c93"/></linearGradient>
   <linearGradient id="r" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity="0.34"/><stop offset="0.4" stop-color="#fff" stop-opacity="0.04"/></linearGradient>
 </defs>
 <path d="M12 30a9 9 0 0 1 9-9h27l10 10h49a9 9 0 0 1 9 9v10H12z" fill="url(#b)"/>
 <rect x="12" y="38" width="104" height="72" rx="10" fill="url(#f)"/>
 <rect x="12.500" y="38.500" width="103" height="71" rx="9.500" fill="none" stroke="url(#r)"/>
-<g transform="translate(43.600 53.600) scale(1.700)" fill="none" stroke="#1a1d25" stroke-opacity="0.7" stroke-width="1.900" stroke-linecap="round" stroke-linejoin="round">{engraving}</g>
+<g transform="translate(43.600 53.600) scale(1.700)" fill="none" stroke="#141b2b" stroke-opacity="0.72" stroke-width="1.900" stroke-linecap="round" stroke-linejoin="round">{engraving}</g>
 </svg>
 """
 
@@ -184,7 +210,7 @@ Context=Places
 def main():
     import shutil
     shutil.rmtree(OUT, ignore_errors=True)
-    sets = (("apps", {k: tile(v, k in WARN) for k, v in APPS.items()}), ("places", {k: folder(v) for k, v in PLACES.items()}))
+    sets = (("apps", {k: tile(v, INK_OF.get(k, "silver")) for k, v in APPS.items()}), ("places", {k: folder(v) for k, v in PLACES.items()}))
     for sub, items in sets:
         d = os.path.join(OUT, "scalable", sub)
         os.makedirs(d, exist_ok=True)

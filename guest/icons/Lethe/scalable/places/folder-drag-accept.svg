@@ -1,11 +1,11 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
 <defs>
-  <linearGradient id="b" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#5d6474"/><stop offset="1" stop-color="#4a5060"/></linearGradient>
-  <linearGradient id="f" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#9aa2b6"/><stop offset="1" stop-color="#666e83"/></linearGradient>
+  <linearGradient id="b" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#566587"/><stop offset="1" stop-color="#45526f"/></linearGradient>
+  <linearGradient id="f" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#8fa3cc"/><stop offset="1" stop-color="#5b6c93"/></linearGradient>
   <linearGradient id="r" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity="0.34"/><stop offset="0.4" stop-color="#fff" stop-opacity="0.04"/></linearGradient>
 </defs>
 <path d="M12 30a9 9 0 0 1 9-9h27l10 10h49a9 9 0 0 1 9 9v10H12z" fill="url(#b)"/>
 <rect x="12" y="38" width="104" height="72" rx="10" fill="url(#f)"/>
 <rect x="12.500" y="38.500" width="103" height="71" rx="9.500" fill="none" stroke="url(#r)"/>
-<g transform="translate(43.600 53.600) scale(1.700)" fill="none" stroke="#1a1d25" stroke-opacity="0.7" stroke-width="1.900" stroke-linecap="round" stroke-linejoin="round"></g>
+<g transform="translate(43.600 53.600) scale(1.700)" fill="none" stroke="#141b2b" stroke-opacity="0.72" stroke-width="1.900" stroke-linecap="round" stroke-linejoin="round"></g>
 </svg>
