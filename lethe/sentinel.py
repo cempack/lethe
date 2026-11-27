@@ -16,7 +16,7 @@ Severities:
 """
 import hashlib, os, socket, subprocess, threading, time
 
-from .core import LIB, read
+from .core import LIB, SEALED, read, vm_hidden
 
 # Tools whose presence next to a private session deserves a warning.
 SNOOPS = {"strace", "ltrace", "gdb", "lldb", "frida", "frida-server", "tcpdump", "wireshark", "tshark", "dumpcap",
@@ -104,6 +104,8 @@ def _modules():
 def tampered():
     """Files that differ from the root-owned manifest written at install time."""
     bad = []
+    if SEALED and not read(MANIFEST):
+        return ["the list of Lethe's files (MANIFEST) is missing"]
     for line in read(MANIFEST).splitlines():
         digest, _, rel = line.partition("  ")
         try:
@@ -118,7 +120,8 @@ def tampered():
 def preflight():
     """Checks before a session may start: [(severity, title, detail)]."""
     found = []
-    inject = [v for v in ("LD_PRELOAD", "LD_AUDIT", "LD_LIBRARY_PATH", "PYTHONPATH") if os.environ.get(v)]
+    inject = [v for v in ("LD_PRELOAD", "LD_AUDIT", "LD_LIBRARY_PATH", "LD_DEBUG_OUTPUT", "LD_PROFILE", "GTK_MODULES",
+                          "GTK_PATH", "GIO_EXTRA_MODULES", "GI_TYPELIB_PATH") if os.environ.get(v)]
     if inject or read("/etc/ld.so.preload"):
         found.append(("critical", "Code injection is configured",
                       "Libraries are being forced into every program (" + ", ".join(inject or ["/etc/ld.so.preload"]) + ")."))
@@ -132,9 +135,9 @@ def preflight():
         found.append(("warning", "Inspection tools are running", ", ".join(snoops) + " can observe other programs or the network."))
     if _remote_logins():
         found.append(("warning", "Someone is logged in remotely", "A remote session (SSH or similar) is open on this computer."))
-    if read("/proc/sys/kernel/yama/ptrace_scope", "0") == "0":
-        found.append(("warning", "Process snooping is unrestricted",
-                      "Any of your programs may attach to any other (kernel.yama.ptrace_scope is 0)."))
+    if not vm_hidden():
+        found.append(("warning", "The session's memory is not sealed off",
+                      "This system does not let Lethe close the virtual machine to your other programs."))
     return found
 
 

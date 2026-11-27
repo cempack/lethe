@@ -11,6 +11,7 @@ from . import core, sentinel
 
 def main():
     cmd = sys.argv[1] if len(sys.argv) > 1 else "open"
+    core.lock_down()
     if cmd in ("open", "start"):
         if cmd == "start":
             os.environ["LETHE_AUTOSTART"] = "1"

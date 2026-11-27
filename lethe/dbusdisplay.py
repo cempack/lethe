@@ -155,6 +155,8 @@ class Screen(threading.Thread):
         try:
             if offset % mmap.ALLOCATIONGRANULARITY or offset > (1 << 31):
                 raise ValueError("unaligned mapping")
+            if os.fstat(fd).st_size < offset + stride * h:       # reading past the end would kill us
+                raise ValueError("mapping larger than its memory")
             mapped = mmap.mmap(fd, stride * h, mmap.MAP_SHARED, mmap.PROT_READ, offset=offset)
         finally:
             os.close(fd)

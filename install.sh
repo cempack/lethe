@@ -136,7 +136,8 @@ fi
 if [[ -d /run/systemd/system ]]; then
   say "Installing the firewalled network relay (user '$NET_USER', public internet only)"
   id "$NET_USER" >/dev/null 2>&1 || $SUDO useradd --system --no-create-home --shell /usr/sbin/nologin "$NET_USER"
-  PASST="$(command -v passt) $(/usr/local/bin/lethe _passt-args)"
+  # The relay's program, looked up in system folders only (never in a folder of yours on PATH).
+  PASST="$(PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin command -v passt) $(/usr/local/bin/lethe _passt-args)"
   HARDENING='
 NoNewPrivileges=yes
 CapabilityBoundingSet=
@@ -158,8 +159,9 @@ MemoryDenyWriteExecute=yes
 SystemCallArchitectures=native
 UMask=0077'
   # Kernel firewall for the relay only: public internet (Tor), never this
-  # machine, the LAN, VPN/Tailscale ranges or containers.
-  DENY='IPAddressDeny=localhost link-local multicast 0.0.0.0/8 10.0.0.0/8 100.64.0.0/10 172.16.0.0/12 192.0.0.0/24 192.168.0.0/16 198.18.0.0/15 240.0.0.0/4 fc00::/7 fec0::/10'
+  # machine, the LAN, VPN/Tailscale ranges or containers. The relay is IPv4-only,
+  # so all of IPv6 is closed as well.
+  DENY='IPAddressDeny=localhost link-local multicast 0.0.0.0/8 10.0.0.0/8 100.64.0.0/10 172.16.0.0/12 192.0.0.0/24 192.168.0.0/16 198.18.0.0/15 240.0.0.0/4 ::/0'
 
   socket_unit() {  # name, description
     $SUDO tee "/etc/systemd/system/$1.socket" >/dev/null <<EOF
@@ -230,7 +232,12 @@ EOF
   $SUDO systemctl enable lethe-vpn.service 2>/dev/null || true
 
   say "Enabling the daily background Tails update"
-  $SUDO tee /etc/systemd/user/lethe-update.service >/dev/null <<'EOF'
+  # The updater talks to the internet, so it runs in a box of its own: it sees the folder the
+  # image lives in and nothing else of your home, and cannot write anywhere else.
+  install -d -m 0700 "${XDG_DATA_HOME:-$HOME/.local/share}/lethe"
+  IMAGES='%h/.local/share/lethe'
+  [[ -n ${XDG_DATA_HOME:-} ]] && IMAGES="$XDG_DATA_HOME/lethe"
+  $SUDO tee /etc/systemd/user/lethe-update.service >/dev/null <<EOF
 [Unit]
 Description=Download and verify the latest Tails image
 Wants=network-online.target
@@ -241,6 +248,20 @@ Type=oneshot
 ExecStart=/usr/local/bin/lethe update
 Nice=10
 IOSchedulingClass=idle
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=tmpfs
+BindPaths=$IMAGES %t
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictNamespaces=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+SystemCallArchitectures=native
+UMask=0077
 EOF
   $SUDO tee /etc/systemd/user/lethe-update.timer >/dev/null <<'EOF'
 [Unit]

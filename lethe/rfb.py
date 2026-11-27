@@ -1,8 +1,11 @@
 """The two private channels between the Lethe window and the sandboxed VM.
 
-Screen   reads raw pixels from QEMU's VNC socket. Output only: we never send
-         input, clipboard or files over it, and ignore anything but pixels.
+Screen   reads raw pixels over VNC. Output only: we never send input, clipboard
+         or files over it, and ignore anything but pixels.
 Control  sends keyboard and pointer events over QMP.
+
+Neither has a socket file. Control is one end of a socket pair QEMU was started
+with; Screen makes another pair and hands QEMU its end through Control.
 
 Both peers are treated as hostile: every size is bounds-checked before use.
 """
@@ -25,9 +28,9 @@ class Frame:
 class Screen(threading.Thread):
     """Reads the VM's picture. Frames are published whole, never half-applied."""
 
-    def __init__(self, path, fill_alpha=False):
+    def __init__(self, control, fill_alpha=False):
         super().__init__(daemon=True)
-        self.path, self.fill_alpha = path, fill_alpha    # fill_alpha: the drawing side cannot ignore byte 4
+        self.control, self.fill_alpha = control, fill_alpha    # fill_alpha: the drawing side cannot ignore byte 4
         self.lock, self.send_lock = threading.Lock(), threading.Lock()
         self.width = self.height = 0
         self.pixels = bytearray()        # BGRX
@@ -55,8 +58,9 @@ class Screen(threading.Thread):
             raise ValueError("implausible screen size")
 
     def _handshake(self):
-        self.sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-        self.sock.connect(self.path)
+        self.sock, theirs = socket.socketpair(socket.AF_UNIX, socket.SOCK_STREAM)
+        self.control.add_client("vnc", theirs.fileno(), skipauth=True)
+        theirs.close()
         self._read(12)                                       # "RFB 003.008\n"
         self.sock.sendall(b"RFB 003.008\n")
         if 1 not in self._read(self._read(1)[0]):            # security type 1 = none (the socket is private)
@@ -81,13 +85,16 @@ class Screen(threading.Thread):
 
     def _update(self):
         """Read one FramebufferUpdate. Returns (new size or None, [(x, y, w, h, data)], pointer)."""
-        size, rects, pointer = None, [], None
+        size, rects, pointer, total = None, [], None, 0
         for _ in range(struct.unpack(">xH", self._read(3))[0]):
             x, y, rw, rh, enc = struct.unpack(">HHHHi", self._read(12))
             if enc == 0:
                 limit = size or (self.width, self.height)
                 if x + rw > limit[0] or y + rh > limit[1]:
                     raise ValueError("update outside the screen")
+                total += rw * rh                     # one update never needs more than the screen, twice over
+                if total > 2 * limit[0] * limit[1]:
+                    raise ValueError("update larger than the screen")
                 rects.append((x, y, rw, rh, self._read(rw * rh * 4)))
             elif enc == -223:
                 self._check(rw, rh)
@@ -196,9 +203,8 @@ class Screen(threading.Thread):
 
 
 class Control:
-    def __init__(self, path):
-        self.sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-        self.sock.connect(path)
+    def __init__(self, sock):
+        self.sock = sock                 # core.Session.qmp
         self.lock = threading.Lock()
         self._send({"execute": "qmp_capabilities"})
         threading.Thread(target=self._drain, daemon=True).start()
@@ -258,12 +264,16 @@ class Control:
     def button(self, name, down):
         self._events([{"type": "btn", "data": {"down": bool(down), "button": name}}])
 
-    def add_display_client(self, fd):
-        """Give QEMU one end of a socket for its D-Bus display (QEMU serves, we connect)."""
+    def add_client(self, protocol, fd, **more):
+        """Give QEMU one end of a socket pair to serve a display protocol on."""
         msg = json.dumps({"execute": "getfd", "arguments": {"fdname": "lethe-display"}}).encode() + b"\n"
         with self.lock:
             self.sock.sendmsg([msg], [(socket.SOL_SOCKET, socket.SCM_RIGHTS, struct.pack("i", fd))])
-        self._send({"execute": "add_client", "arguments": {"protocol": "@dbus-display", "fdname": "lethe-display"}})
+        self._send({"execute": "add_client", "arguments": {"protocol": protocol, "fdname": "lethe-display", **more}})
+
+    def add_display_client(self, fd):
+        """The D-Bus display: QEMU serves, we connect."""
+        self.add_client("@dbus-display", fd)
 
     def insert(self, device, path):
         """Put a (read-only) disc image into a virtual drive, replacing what was there. The old disc

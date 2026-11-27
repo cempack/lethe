@@ -15,7 +15,9 @@ Layers, outside in:
   5. Display     QEMU never touches the desktop. It exposes raw pixels on a
                  private socket; the Lethe window draws them and feeds input back.
 """
-import fcntl, hashlib, io, json, os, re, resource, shutil, signal, socket, struct, subprocess, sys, tarfile, threading, time
+import fcntl, hashlib, io, json, os, re, resource, select, shutil, signal, socket, struct, subprocess, sys, tarfile, threading, time
+
+from .wiper import hide, wipe
 
 APP = "lethe"
 DATA = os.path.join(os.environ.get("XDG_DATA_HOME") or os.path.expanduser("~/.local/share"), APP)
@@ -28,7 +30,8 @@ META_URL = "https://tails.net/install/v2/Tails/amd64/stable/latest.json"
 KEY_URL = "https://tails.net/tails-signing.key"
 # Tails signing key, pinned: https://tails.net/doc/about/openpgp_keys/
 TAILS_FPR = "A490D0F4D311A4153E2BB7CADBB802B258ACD84F"
-CURL = ["curl", "--proto", "=https", "--proto-redir", "=https", "--tlsv1.2", "-fL", "--retry", "3"]
+# -q: ignore ~/.curlrc, which could redirect or weaken any of this.
+CURL = ["curl", "-q", "--proto", "=https", "--proto-redir", "=https", "--tlsv1.2", "-fL", "--retry", "3"]
 # cpus 0 = automatic: half the cores, at most 4
 DEFAULTS = {"ram_mb": 4096, "cpus": 0, "width": 1920, "height": 1080, "skip_welcome": True,
             "harden_guest": True, "auto_tor": True, "vpn": False, "sentinel": True,
@@ -48,11 +51,16 @@ def read(path, default=""):
 
 
 def settings():
+    """Saved settings over the defaults. The file is the user's to edit, so it is only data:
+    unknown keys and values of the wrong type are ignored (they end up on QEMU's command line)."""
+    cfg = dict(DEFAULTS)
     try:
         with open(CONFIG) as f:
-            return {**DEFAULTS, **{k: v for k, v in json.load(f).items() if k in DEFAULTS}}
-    except (OSError, ValueError):
-        return dict(DEFAULTS)
+            saved = json.load(f)
+        cfg.update({k: v for k, v in saved.items() if k in DEFAULTS and type(v) is type(DEFAULTS[k])})
+    except (OSError, ValueError, AttributeError):
+        pass
+    return cfg
 
 
 def save_settings(cfg):
@@ -88,11 +96,13 @@ def latest(timeout=30):
     return version, url, sha, int(f.get("size", 0))
 
 
-def signed_by_tails(iso, sig, key):
+def signed_by_tails(iso, sig, key, fresh=False):
     """True only if `sig` is a valid signature of `iso` made by the pinned Tails key.
 
     The key file is untrusted input: whatever it holds, the result counts only
-    when gpg reports the pinned primary-key fingerprint.
+    when gpg reports the pinned primary-key fingerprint, and nothing else about
+    the signature is wrong. `fresh` (a new download) also refuses an expired key;
+    an image already on disk may outlive the key it was verified with.
     """
     home = os.path.join(RUNTIME, f"{APP}-gpg-{os.getpid()}-{threading.get_ident()}")
     os.makedirs(home, mode=0o700, exist_ok=True)
@@ -102,8 +112,10 @@ def signed_by_tails(iso, sig, key):
         out = subprocess.run(["gpg", "--batch", "--no-autostart", "--status-fd", "1", "--verify", sig, iso],
                              env=env, capture_output=True, text=True).stdout
         # "[GNUPG:] VALIDSIG <signing-subkey-fpr> ... <primary-key-fpr>"
-        return any(len(l.split()) > 2 and l.split()[1] == "VALIDSIG" and l.split()[-1] == TAILS_FPR
-                   for l in out.splitlines())
+        status = [l.split() for l in out.splitlines() if l.startswith("[GNUPG:] ") and len(l.split()) > 1]
+        wrong = {"BADSIG", "ERRSIG", "REVKEYSIG"} | ({"EXPKEYSIG", "EXPSIG"} if fresh else set())
+        return (any(s[1] == "VALIDSIG" and s[-1] == TAILS_FPR for s in status if len(s) > 2)
+                and not any(s[1] in wrong for s in status))
     finally:
         shutil.rmtree(home, ignore_errors=True)
 
@@ -144,7 +156,7 @@ def update(progress=lambda text, fraction: None):
         progress("Verifying the Tails signature", None)
         subprocess.run([*CURL, "-sS", "-o", key, KEY_URL], check=True)
         subprocess.run([*CURL, "-sS", "-o", sig + ".part", url + ".sig"], check=True)
-        if not signed_by_tails(part, sig + ".part", key):
+        if not signed_by_tails(part, sig + ".part", key, fresh=True):
             os.unlink(part)
             raise LetheError("The image is NOT signed by the Tails developers. It has been discarded.")
         os.replace(sig + ".part", sig)
@@ -265,7 +277,31 @@ def vpn_up():
     return os.path.exists("/run/netns/lethe") and os.path.exists(VPN_SOCK)
 
 
-MODULES = os.environ.get("LETHE_QEMU_MODULE_DIR")     # developer override: extra QEMU modules to load
+# Installed by install.sh: the code is root-owned, and nothing a program running as the user can
+# set (environment, PATH) may change what gets run.
+SEALED = os.stat(os.path.realpath(__file__)).st_uid == 0 and os.getuid() != 0
+SAFE_PATH = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+# Variables that make GTK, GLib or the graphics stack load code from a folder of the caller's choosing.
+LOADERS = ("GTK_PATH", "GTK_EXE_PREFIX", "GTK_DATA_PREFIX", "GTK_IM_MODULE_FILE", "GTK_MODULES", "GIO_EXTRA_MODULES",
+           "GIO_MODULE_DIR", "GI_TYPELIB_PATH", "GDK_PIXBUF_MODULE_FILE", "GDK_PIXBUF_MODULEDIR",
+           "GSETTINGS_SCHEMA_DIR", "GSETTINGS_BACKEND", "LIBGL_DRIVERS_PATH", "GBM_BACKENDS_PATH",
+           "__EGL_VENDOR_LIBRARY_DIRS", "__EGL_VENDOR_LIBRARY_FILENAMES", "VK_ICD_FILENAMES", "VK_DRIVER_FILES",
+           "VK_LAYER_PATH", "VK_ADD_LAYER_PATH", "VK_INSTANCE_LAYERS", "LIBVA_DRIVERS_PATH", "QEMU_MODULE_DIR",
+           "G_DBUS_COOKIE_SHA1_KEYRING_DIR", "CURL_HOME", "GNUPGHOME")
+# Developer override, honoured only when running from a source folder: extra QEMU modules to load.
+MODULES = None if SEALED else os.environ.get("LETHE_QEMU_MODULE_DIR")
+
+
+def lock_down():
+    """Called first thing by the app. Makes this process find its tools in system folders only,
+    drops variables that would load foreign code into it, keeps new files private, and closes
+    the process to the user's other programs (see wiper.hide)."""
+    os.umask(0o077)
+    if SEALED:
+        os.environ["PATH"] = SAFE_PATH
+        for name in LOADERS:
+            os.environ.pop(name, None)
+    hide()
 
 
 def fast_display():
@@ -296,13 +332,29 @@ def dbus_display():
         return False
 
 
+def vm_hidden():
+    """True if the VM can be run from an execute-only copy of QEMU, which closes its memory to the
+    user's other programs (see Session.start). Needs a runtime folder that allows running programs,
+    and a kernel that does not treat such processes as debuggable."""
+    try:
+        return not os.statvfs(RUNTIME).f_flag & os.ST_NOEXEC and read("/proc/sys/fs/suid_dumpable", "0") != "1"
+    except OSError:
+        return False
+
+
 def has_kvm():
     return os.access("/dev/kvm", os.R_OK | os.W_OK)
 
 
 def running():
+    """PID of the running session's sandbox, or None. The number alone is not trusted: after a
+    crash it may belong to something else by now."""
     pid = read(os.path.join(RT, "pid"))
-    return int(pid) if pid.isdigit() and os.path.exists(f"/proc/{pid}") else None
+    try:
+        with open(f"/proc/{int(pid)}/cmdline", "rb") as f:
+            return int(pid) if b"process=lethe-qemu" in f.read() else None
+    except (OSError, ValueError):
+        return None
 
 
 # ── The session ──────────────────────────────────────────────────────────────
@@ -315,8 +367,9 @@ class Session:
         self.vm = self.ram_fd = None
         self.kvm, self.virtio, self.dbus = True, False, False
         self.helpers, self.why, self.started = [], None, None
+        self.guard = self.guard_ctl = self.leash = None
         self.clipboard, self.clips = False, 0
-        self.vnc_path, self.qmp_path = os.path.join(RT, "q", "vnc.sock"), os.path.join(RT, "q", "qmp.sock")
+        self.qmp = None                  # our end of the VM's control channel
 
     def start(self):
         cfg = self.cfg
@@ -347,6 +400,7 @@ class Session:
         self.stage("sandbox")
         resource.setrlimit(resource.RLIMIT_CORE, (0, 0))   # a crash must never write guest RAM to disk
         shutil.rmtree(RT, ignore_errors=True)
+        os.makedirs(RT, mode=0o700)
         os.makedirs(os.path.join(RT, "q"), mode=0o700)
         with open(os.path.join(RT, "passwd"), "w") as f:
             f.write("vm:x:1000:1000::/:/usr/bin/false\n")
@@ -363,13 +417,27 @@ class Session:
         self.keyring = os.path.join(RT, "q", "keyring")
         if self.dbus:
             os.makedirs(self.keyring, mode=0o700)
-        qemu_bin = os.path.realpath(shutil.which("qemu-system-x86_64"))
-        bwrap = ["bwrap", "--unshare-all", "--die-with-parent", "--new-session", "--cap-drop", "ALL", "--clearenv",
+        qemu_bin = qemu_run = os.path.realpath(shutil.which("qemu-system-x86_64"))
+        # Run QEMU from a private copy that can be executed but not read. The kernel then treats
+        # the process as it does a setuid program: your other programs cannot attach to it, read
+        # its memory, or reach the guest's memory file through /proc/<pid>/fd.
+        if vm_hidden():
+            qemu_run = os.path.join(RT, "qemu")
+            shutil.copyfile(qemu_bin, qemu_run)
+            os.chmod(qemu_run, 0o111)
+            try:                                                # some systems forbid running it from here
+                subprocess.run([qemu_run, "--version"], capture_output=True, timeout=10, check=True)
+            except (OSError, subprocess.SubprocessError):
+                qemu_run = qemu_bin
+        # No user namespaces inside the sandbox: they are how most kernel exploits get started.
+        no_userns = (["--unshare-user", "--disable-userns"] if "--disable-userns" in subprocess.run(
+            ["bwrap", "--help"], capture_output=True, text=True).stdout else [])
+        bwrap = ["bwrap", "--unshare-all", *no_userns, "--die-with-parent", "--new-session", "--cap-drop", "ALL", "--clearenv",
                  "--hostname", "localhost", "--uid", "1000", "--gid", "1000", "--setenv", "PATH", "/usr/bin",
                  "--proc", "/proc", "--dev", "/dev", *(["--dev-bind", "/dev/kvm", "/dev/kvm"] if self.kvm else []),
                  "--tmpfs", "/tmp", "--tmpfs", "/run", "--bind", os.path.join(RT, "q"), "/run/q",
                  "--tmpfs", "/etc", "--ro-bind", os.path.join(RT, "passwd"), "/etc/passwd",
-                 "--dir", "/usr/bin", "--ro-bind", qemu_bin, qemu_bin, "--ro-bind", iso, "/tails.iso",
+                 "--dir", "/usr/bin", "--ro-bind", qemu_run, qemu_bin, "--ro-bind", iso, "/tails.iso",
                  *(["--setenv", "G_DBUS_COOKIE_SHA1_KEYRING_DIR", "/run/q/keyring"] if self.dbus else [])]
         for d in ("/usr/lib", "/usr/lib32", "/usr/lib64", "/usr/libx32", "/lib", "/lib32", "/lib64", "/libx32", "/bin"):
             if os.path.islink(d):                               # mirror the host's /usr layout
@@ -414,11 +482,13 @@ class Session:
         os.set_inheritable(net.fileno(), True)
 
         self.stage("boot")
+        self.qmp, theirs = socket.socketpair(socket.AF_UNIX, socket.SOCK_STREAM)
         qemu = [qemu_bin, "-name", "vm,process=lethe-qemu",
                 "-machine", f"q35,accel={'kvm' if self.kvm else 'tcg'},vmport=off,dump-guest-core=off,"
                             "mem-merge=off,memory-backend=ram",
                 "-object", f"memory-backend-file,id=ram,size={size},mem-path=/proc/self/fd/{self.ram_fd},share=on",
-                "-cpu", f"{'host' if self.kvm else 'max'},model-id=Virtual CPU",   # hide the real CPU name "-smp", str(cfg["cpus"]), "-m", f"{cfg['ram_mb']}M",
+                "-cpu", f"{'host' if self.kvm else 'max'},model-id=Virtual CPU",   # hide the real CPU name
+                "-smp", str(cfg["cpus"]), "-m", f"{cfg['ram_mb']}M",
                 *(["-overcommit", "mem-lock=on"] if locked else []),
                 "-nodefaults", "-no-user-config", *drives,
                 "-netdev", f"socket,id=net0,fd={net.fileno()}", "-device", "virtio-net-pci,netdev=net0,romfile=",
@@ -428,10 +498,15 @@ class Session:
                 # virtio: resizable, pointer drawn by us. VGA: smallest possible device, fixed size.
                 "-device", (f"virtio-vga,xres={cfg['width']},yres={cfg['height']}" if self.virtio
                             else f"VGA,vgamem_mb=32,xres={cfg['width']},yres={cfg['height']}"),
-                *(["-display", "dbus,p2p=on"] if self.dbus else ["-display", "none", "-vnc", "unix:/run/q/vnc.sock"]),
-                "-qmp", "unix:/run/q/qmp.sock,server=on,wait=off",
+                # The picture and the controls travel over sockets that exist only as open handles
+                # between Lethe and QEMU: there is no socket file for anything else to connect to.
+                *(["-display", "dbus,p2p=on"] if self.dbus else ["-display", "none", "-vnc", "none"]),
+                "-chardev", f"socket,id=qmp,fd={theirs.fileno()}", "-mon", "chardev=qmp,mode=control",
                 "-serial", "none", "-parallel", "none",
                 "-sandbox", "on,obsolete=deny,elevateprivileges=deny,spawn=deny,resourcecontrol=deny"]
+        # Helpers hold something for as long as the session lives (the sleep delay, the power profile).
+        # Each one just reads from this pipe: it ends when Lethe closes it, or when Lethe dies.
+        self.leash = os.pipe()
         aa = ["aa-exec", "-p", "lethe", "--"] if os.path.exists("/etc/apparmor.d/lethe") and shutil.which("aa-exec") else []
         self.helpers += self._sleep_guard()
         # On mains power, hold the "performance" power profile for the life of the session.
@@ -441,20 +516,34 @@ class Session:
         if shutil.which("powerprofilesctl") and "0" not in mains:
             self.helpers.append(subprocess.Popen(
                 ["powerprofilesctl", "launch", "-p", "performance", "-r", "Private session", "-i", "org.lethe.App",
-                 "sleep", "infinity"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL))
-        self.vm = subprocess.Popen([*aa, *bwrap, "--", *qemu], pass_fds=[net.fileno(), self.ram_fd],
-                                   stdin=subprocess.DEVNULL, stderr=subprocess.PIPE)
-        net.close()
+                 "cat"], stdin=self.leash[0], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL))
+        # The guard wipes the guest's memory if Lethe dies before doing it (see wiper.py). It knows
+        # the VM is gone when `life`, a pipe only the VM's processes hold open, closes.
+        ctl_r, self.guard_ctl = os.pipe()
+        life_r, life_w = os.pipe()
+        self.guard = subprocess.Popen([sys.executable, "-I", os.path.join(LIB, "lethe", "wiper.py"),
+                                       str(self.ram_fd), str(ctl_r), str(life_r)], pass_fds=[self.ram_fd, ctl_r, life_r],
+                                      stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                                      start_new_session=True)
+        os.close(ctl_r), os.close(life_r)
+        try:
+            self.vm = subprocess.Popen([*aa, *bwrap, "--", *qemu], pass_fds=[net.fileno(), self.ram_fd, life_w, theirs.fileno()],
+                                       stdin=subprocess.DEVNULL, stderr=subprocess.PIPE)
+        finally:
+            os.close(life_w)
+            net.close()
+            theirs.close()
         self.started = time.time()
         with open(os.path.join(RT, "pid"), "w") as f:
             f.write(str(self.vm.pid))
-        for _ in range(100):                                    # wait for QEMU's sockets
-            if os.path.exists(self.qmp_path) and (self.dbus or os.path.exists(self.vnc_path)):
-                return vpn
+        for _ in range(100):                                    # QEMU says hello on the control channel
+            if select.select([self.qmp], [], [], 0.05)[0]:
+                if self.qmp.recv(1, socket.MSG_PEEK):           # its greeting; nothing = it hung up
+                    return vpn
+                self.vm.wait(5)
             if self.vm.poll() is not None:
                 err = self.vm.stderr.read().decode(errors="replace").strip().splitlines()
                 raise LetheError("The virtual machine failed to start" + (f": {err[-1]}" if err else "."))
-            time.sleep(0.05)
         raise LetheError("The virtual machine did not come up in time.")
 
     def _network(self):
@@ -492,9 +581,11 @@ class Session:
             mon = ["dbus-monitor", "--system",
                    "type='signal',interface='org.freedesktop.login1.Manager',member='PrepareForSleep'"]
         else:   # cannot watch for sleep, so forbid it while the session lives
-            return [subprocess.Popen([*inhibit, "--mode=block", "sleep", "infinity"])]
-        holder = subprocess.Popen([*inhibit, "--mode=delay", "sleep", "infinity"])
-        watcher = subprocess.Popen(mon, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
+            return [subprocess.Popen([*inhibit, "--mode=block", "cat"], stdin=self.leash[0], stdout=subprocess.DEVNULL)]
+        holder = subprocess.Popen([*inhibit, "--mode=delay", "cat"], stdin=self.leash[0], stdout=subprocess.DEVNULL)
+        # The monitor never reads its input, so a shell waits on the leash for it.
+        watcher = subprocess.Popen(["sh", "-c", '"$@" & cat >/dev/null; kill $!', "sh", *mon], stdin=self.leash[0],
+                                   stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
 
         def watch():
             armed = False
@@ -502,7 +593,7 @@ class Session:
                 armed = armed or "PrepareForSleep" in line
                 if armed and re.search(r"\(true,\)|boolean true", line):
                     self.destroy("The computer was going to sleep")
-                    holder.kill()
+                    holder.kill()                               # let the computer sleep now
                     return
                 if armed and re.search(r"\(false,\)|boolean false", line):
                     armed = False
@@ -539,23 +630,38 @@ class Session:
         self.destroy()
         if self.vm:
             self.vm.wait()
+        for fd in self.leash or ():
+            os.close(fd)
+        self.leash = None
         for h in self.helpers:
-            h.kill()
+            try:
+                h.wait(2)
+            except subprocess.TimeoutExpired:
+                h.kill()
+        self.helpers = []
+        if self.qmp:
+            self.qmp.close()
+            self.qmp = None
         wiped = 0
         if self.ram_fd is not None:
-            size, zeros, off = os.fstat(self.ram_fd).st_size, memoryview(bytes(8 << 20)), 0
-            try:
-                while off < size:
-                    off = os.lseek(self.ram_fd, off, os.SEEK_DATA)    # skip pages the guest never touched
-                    end = os.lseek(self.ram_fd, off, os.SEEK_HOLE)
-                    while off < end:
-                        n = os.pwrite(self.ram_fd, zeros[:min(len(zeros), end - off)], off)
-                        off, wiped = off + n, wiped + n
-                        progress(off / size)
-            except OSError:
-                pass                                                  # ENXIO: no more data
+            wiped = wipe(self.ram_fd, progress)
             os.close(self.ram_fd)
             self.ram_fd = None
+        if self.guard_ctl is not None:                   # wiped: the guard can stand down
+            try:
+                os.write(self.guard_ctl, b"1")
+            except OSError:
+                pass
+            os.close(self.guard_ctl)
+            self.guard_ctl = None
+            self.guard.wait()
+        for root, _, names in os.walk(RT):               # the config and clipboard discs live in RAM too
+            for name in names:
+                try:
+                    with open(os.path.join(root, name), "r+b") as f:
+                        f.write(bytes(min(os.fstat(f.fileno()).st_size, 64 << 20)))
+                except OSError:
+                    pass
         shutil.rmtree(RT, ignore_errors=True)
         return wiped
 
@@ -601,7 +707,7 @@ def audit(cfg=None):
     add("display", True, "Display", ("Isolated", "No access to your desktop, clipboard, camera or microphone."), None)
     add("sleep", bool(shutil.which("systemd-inhibit")), "Sleep", ("Guarded", "The session is destroyed before the computer sleeps."),
         ("Unguarded", "Sleep cannot be intercepted on this system."), "warn")
-    add("integrity", os.stat(os.path.join(LIB, "lethe", "core.py")).st_uid == 0, "Integrity",
+    add("integrity", SEALED, "Integrity",
         ("Sealed", "Lethe's own files are root-owned and checked before each session."),
         ("Unsealed", "Running from a folder your user can modify."), "warn")
     return checks

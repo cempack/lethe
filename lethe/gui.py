@@ -4,7 +4,7 @@ Pages are widget trees built once; `refresh` and the session thread only change
 their contents. Everything that touches GTK runs on the main thread: worker
 threads hand results over with `ui(...)`.
 """
-import hashlib, os, subprocess, sys, threading, time, types
+import hashlib, os, signal, subprocess, sys, threading, time, types
 
 from .widgets import (Column, Display, Gtk, GLib, Meter, Pango, box, button, check_row, clear, dot, icon_button,
                       image, label, log, margins, panel, set_state, setting_row, setup_style, tile, ui, NEEDS_ALPHA)
@@ -410,7 +410,7 @@ class Window(Gtk.ApplicationWindow):
                 log("display", "dbus", "shared memory" if screen.stride and screen.buffer is not None else "")
                 return screen
             raise core.LetheError(f"The VM's display did not connect ({screen.failed or 'timed out'}).")
-        screen = rfb.Screen(self.session.vnc_path, fill_alpha=NEEDS_ALPHA)
+        screen = rfb.Screen(self.control, fill_alpha=NEEDS_ALPHA)
         screen.start()
         log("display", "vnc")
         return screen
@@ -432,7 +432,7 @@ class Window(Gtk.ApplicationWindow):
                         raise                              # offline with an older image: carry on with it
             self.session = core.Session(cfg, stage=lambda name: ui(self.step, name))
             vpn = self.session.start()
-            self.control = rfb.Control(self.session.qmp_path)
+            self.control = rfb.Control(self.session.qmp)
             self.screen = self._open_screen()
             if cfg["sentinel"]:
                 self.watch = sentinel.Sentinel(self.session.vm.pid, self._alarm)
@@ -541,6 +541,8 @@ class Window(Gtk.ApplicationWindow):
         if clipboard.is_local():
             return
         mimes = clipboard.get_formats().get_mime_types() or []
+        if "x-kde-passwordManagerHint" in mimes:      # password managers mark what they copy: never share it
+            return
         if any(m.startswith("image/") for m in mimes) and not any(m.startswith("text/plain") for m in mimes):
             clipboard.read_texture_async(None, self._clip_image)
         elif any(m.startswith("text/") or m in ("UTF8_STRING", "STRING", "TEXT") for m in mimes):
@@ -803,5 +805,14 @@ def main():
         setup_style()
         Window(app).present()
 
+    def stop(*_):
+        """Ctrl+C, `kill`, or the desktop logging out: end the session and wipe before leaving."""
+        for win in app.get_windows():
+            win._closing()
+        app.quit()
+        return GLib.SOURCE_REMOVE
+
+    for sig in (signal.SIGINT, signal.SIGTERM, signal.SIGHUP):
+        GLib.unix_signal_add(GLib.PRIORITY_HIGH, sig, stop)
     app.connect("activate", activate)
     return app.run(None)
