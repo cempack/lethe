@@ -133,6 +133,13 @@ EOF
   fi
 fi
 
+# An imported VPN profile: its name and addresses are readable (Lethe shows them), its key is not.
+if $SUDO test -d /etc/lethe; then
+  $SUDO chmod 755 /etc/lethe
+  for f in wg.json vpn.name; do $SUDO test -f /etc/lethe/$f && $SUDO chmod 644 /etc/lethe/$f; done
+  $SUDO test -f /etc/lethe/wg.conf && $SUDO chmod 600 /etc/lethe/wg.conf
+fi
+
 if [[ -d /run/systemd/system ]]; then
   say "Installing the firewalled network relay (user '$NET_USER', public internet only)"
   id "$NET_USER" >/dev/null 2>&1 || $SUDO useradd --system --no-create-home --shell /usr/sbin/nologin "$NET_USER"

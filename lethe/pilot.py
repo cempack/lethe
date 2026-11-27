@@ -6,7 +6,7 @@ would, so the Tails image stays byte-for-byte the signed original:
   1. waits for the Welcome Screen and presses Enter ("Start Tails" has focus;
      language and keyboard stay on the English/US defaults);
   2. waits for the desktop, opens GNOME's run prompt (Alt+F2) and runs the
-     hardening script from the read-only LETHE config disc;
+     hardening script copied from the read-only LETHE config disc;
   3. confirms it worked by watching the wallpaper change;
   4. loads the Lethe shell extension (dock, top bar, clipboard) from the
      Looking Glass console, which the extension then switches off.
@@ -19,8 +19,10 @@ import threading, time
 
 TAILS_BLUE = (32, 74, 135)       # Tails desktop / greeter background
 SELECTED = bytes((228, 132, 53, 255))   # GNOME selection blue, as BGRA
-DISC = "/dev/disk/by-label/LETHE"   # mounted for the script, ejected right after
-COMMAND = f'sh -c "udisksctl mount -b {DISC}; sh /media/amnesia/LETHE/setup.sh; udisksctl unmount -b {DISC}"'
+DISC = "/dev/disk/by-label/LETHE"
+# Typed into GNOME's run prompt: copy the config disc into the home folder and run the setup script
+# from the copy. The script signals when it is done; Lethe then takes the disc out of the drive.
+COMMAND = f'sh -c "udisksctl mount -b {DISC}; cp -r /media/amnesia/LETHE $HOME/.lethe; sh $HOME/.lethe/setup.sh"'
 # Typed into GNOME's Looking Glass console (Alt+F2, "lg"): loads the Lethe shell extension that
 # setup.sh put in place. GNOME only scans for extensions at login; this loads it now, without one.
 EXT = "lethe@lethe"
@@ -148,8 +150,7 @@ class Pilot(threading.Thread):
             40 * slow)
         if not self.hardened:
             self.control.tap("esc")
-        time.sleep(1.5 * slow)                 # the command's last step unmounts the disc
-        self.control.eject("cfgdisc")          # then it leaves the VM for good
+        self.control.eject("cfgdisc")          # nothing reads the disc any more: out of the drive with it
         if self.hardened:
             self.desktop = self._load_desktop(slow)
 

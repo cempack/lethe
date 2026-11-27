@@ -1,21 +1,13 @@
 #!/bin/sh
 # Lethe guest hardening. Runs once inside Tails, as the unprivileged "amnesia"
-# user, from the read-only LETHE config disc. Everything here is stricter than
-# the Tails defaults and vanishes with the session, like the rest of Tails.
+# user, from a copy of the read-only LETHE config disc (the disc itself is gone by
+# now). Everything here is stricter than the Tails defaults and vanishes with the
+# session, like the rest of Tails.
 g() { gsettings set "$@" 2>/dev/null; }
 
-# Copy everything off the disc first. Lethe ejects it as soon as the wallpaper
-# changes below, so nothing after this point may read from the disc.
 D="$HOME/.lethe"
-mkdir -p "$D" && cp /media/amnesia/LETHE/* "$D/" && chmod -R u+w "$D"
-
-# Brand wallpaper. Changing it is also the signal that the disc can go.
-cp "$D/wall.png" "$HOME/.lethe-wallpaper.png" && {
-  g org.gnome.desktop.background picture-uri "file://$HOME/.lethe-wallpaper.png"
-  g org.gnome.desktop.background picture-uri-dark "file://$HOME/.lethe-wallpaper.png"
-  g org.gnome.desktop.background picture-options zoom
-  g org.gnome.desktop.screensaver picture-uri "file://$HOME/.lethe-wallpaper.png"
-}
+chmod -R u+w "$D"
+DISC=$(readlink -f /dev/disk/by-label/LETHE)
 
 # Appearance. Stock GNOME settings plus a typeface; websites cannot see any of
 # it, because Tor Browser reports the same theme and fonts for everyone.
@@ -32,7 +24,8 @@ g org.gnome.desktop.interface clock-show-weekday true
 g org.gnome.desktop.a11y always-show-universal-access-status false
 g org.gnome.desktop.wm.preferences button-layout ':minimize,maximize,close'
 g org.gnome.desktop.interface enable-hot-corners true
-# The VM draws without a graphics card: animations only make it feel slow.
+# No animations while Lethe's autopilot is at work (it reads the screen, and wants each one whole).
+# The Lethe desktop turns them back on when it loads.
 g org.gnome.desktop.interface enable-animations false
 # Drop the two GNOME Classic panels (the "Apps" menu and the bottom window list)
 # for a clean desktop; Tails' own Tor status and power menu stay. Apps and open
@@ -46,19 +39,9 @@ cp "$D/ext.js" "$X/extension.js"
 cp "$D/ext.css" "$X/stylesheet.css"
 cp "$D/ext.jsn" "$X/metadata.json"
 cp "$D/mark.svg" "$X/mark.svg"
-cp "$D/apps.svg" "$X/apps.svg"
 # Text at the size you are used to: Lethe shows Tails pixel for pixel, at your screen's scale.
 S=$(cat "$D/scale.txt" 2>/dev/null)
 [ -n "$S" ] && g org.gnome.desktop.interface text-scaling-factor "$S"
-# Lethe's app icons, layered over the stock ones.
-[ -f "$D/icons.tar" ] && mkdir -p "$HOME/.local/share/icons" && tar -xf "$D/icons.tar" -C "$HOME/.local/share/icons" \
-  && g org.gnome.desktop.interface icon-theme 'Lethe'
-# Some launchers name an icon file instead of an icon: point a copy of each at the theme.
-mkdir -p "$HOME/.local/share/applications"
-while read -r a icon; do
-  [ -f "/usr/share/applications/$a.desktop" ] && sed "s|^Icon=.*|Icon=$icon|" "/usr/share/applications/$a.desktop" \
-    > "$HOME/.local/share/applications/$a.desktop"
-done < "$HOME/.local/share/icons/Lethe/launchers" 2>/dev/null
 # Lethe palette for every GTK app started from now on.
 mkdir -p "$HOME/.config/gtk-4.0" "$HOME/.config/gtk-3.0"
 cp "$D/gtk4.css" "$HOME/.config/gtk-4.0/gtk.css"
@@ -66,6 +49,9 @@ cp "$D/gtk3.css" "$HOME/.config/gtk-3.0/gtk.css"
 # Title bars of older apps (Tor Connection, Tor Browser) are drawn by a helper that GNOME started
 # before this stylesheet existed. GNOME starts it again at once, now in the Lethe palette.
 pkill -u "$(id -u)" -x mutter-x11-frames 2>/dev/null
+# The Tor Connection window was opened by Tails before any of this existed, in Tails' own colours.
+# Nothing has been done in it yet: open it again, in Lethe's.
+systemctl --user --quiet is-active tca && timeout 15 systemctl --user restart tca
 g org.gnome.Console theme night
 g org.gnome.nautilus.window-state initial-size '(1080, 700)'
 g org.gnome.nautilus.icon-view default-zoom-level 'large'
@@ -125,6 +111,15 @@ fi
 systemctl --user mask --runtime tails-virt-notify-user.service 2>/dev/null
 systemctl --user stop tails-virt-notify-user.service 2>/dev/null
 
+# Lethe's wallpaper, last of all: Lethe is watching for it. When it appears, everything above is
+# in place, and Lethe goes on (it takes the disc out and loads the Lethe desktop).
+cp "$D/wall.png" "$HOME/.lethe-wallpaper.png" && {
+  g org.gnome.desktop.background picture-uri "file://$HOME/.lethe-wallpaper.png"
+  g org.gnome.desktop.background picture-uri-dark "file://$HOME/.lethe-wallpaper.png"
+  g org.gnome.desktop.background picture-options zoom
+  g org.gnome.desktop.screensaver picture-uri "file://$HOME/.lethe-wallpaper.png"
+}
+
 # Tell Lethe when Tor is connected, without any channel out of the VM: switch to a
 # copy of the wallpaper that is 1.4% brighter. Invisible to you, measurable to Lethe.
 cp "$D/online.png" "$HOME/.lethe-online.png"
@@ -133,5 +128,9 @@ cp "$D/online.png" "$HOME/.lethe-online.png"
   g org.gnome.desktop.background picture-uri "file://$HOME/.lethe-online.png"
   g org.gnome.desktop.background picture-uri-dark "file://$HOME/.lethe-online.png"
 ) >/dev/null 2>&1 &
+
+# Lethe takes the config disc out of its drive as soon as the wallpaper above appears. Tails still
+# has it mounted then: let go of it a moment later, and it disappears from Files as well.
+(sleep 6; udisksctl unmount -f -b "$DISC") >/dev/null 2>&1 &
 
 touch "$HOME/.lethe-ready"

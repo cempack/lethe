@@ -24,18 +24,14 @@ const MAX_CLIP = 32 * 1024 * 1024;
 
 // The dock is GNOME's own dash (the one in the overview), shown on the desktop as well. Everything
 // in it is GNOME's: dragging to reorder, right-click menus, running marks, labels, keyboard focus.
-// Two things differ: its icons have one fixed size, matched to the screen's scale (the stock dash
-// only knows 48 and 64), and the button for the app grid is drawn as a tile like the apps.
+// One thing differs: its icons have one fixed size, matched to the screen's scale (the stock dash
+// only knows 48 and 64).
 const LetheDash = GObject.registerClass(
 class LetheDash extends Dash {
-    _init(size, gridIcon) {
+    _init(size) {
         this._size = size;
         super._init();
         this.iconSize = size;
-        const grid = this._showAppsIcon.icon;
-        grid.createIcon = s => new St.Icon({gicon: gridIcon, icon_size: s, style_class: 'show-apps-icon', track_hover: true});
-        grid.setIconSize(1);        // drop the stock symbol...
-        grid.setIconSize(size);     // ...and draw ours
     }
 
     // A right-click menu is open on one of the icons (the dock must not slide away under it).
@@ -72,11 +68,11 @@ class LetheDash extends Dash {
 // window on this workspace is maximised it slides away, and comes back while the pointer rests on
 // the bottom edge of the screen, or on the dock itself.
 class Dock {
-    constructor(scale, dir) {
+    constructor(scale) {
         this._scale = scale;
         this._shown = true;
         this._timers = new Map();
-        this._dash = new LetheDash(this._size(), Gio.icon_new_for_string(dir.get_child('apps.svg').get_path()));
+        this._dash = new LetheDash(this._size());
         this._dash.add_style_class_name('lethe-dock');
         this._dash.onMenu = () => this._soon('sync', 100);
         this._dash.showAppsButton.connectObject('notify::checked', button => {
@@ -172,8 +168,6 @@ class Dock {
         this._shown = shown;
         if (shown)
             actor.show();
-        // Lethe turns GNOME's own animations off (they cost more than they give in a VM without a
-        // graphics card); this one small slide is done by hand.
         actor.save_easing_state();
         actor.set_easing_mode(Clutter.AnimationMode.EASE_OUT_CUBIC);
         actor.set_easing_duration(actor.mapped ? ms : 0);
@@ -214,6 +208,11 @@ class TopBar {
         panel._leftBox.insert_child_at_index(this._mark, 0);
         panel._leftBox.insert_child_at_index(this._name, 1);
 
+        // Two indicators have no job in a Lethe session: the keyboard layout (Lethe translates your
+        // own layout as you type) and the accessibility menu, which stays available in Settings.
+        this._hidden = ['keyboard', 'a11y'].map(role => panel.statusArea[role]?.container).filter(c => c?.visible);
+        this._hidden.forEach(c => c.hide());
+
         this._tracker = Shell.WindowTracker.get_default();
         this._tracker.connectObject('notify::focus-app', () => this._update(), this);
         this._update();
@@ -226,6 +225,7 @@ class TopBar {
 
     destroy() {
         this._tracker.disconnectObject(this);
+        this._hidden.forEach(c => c.show());
         this._mark.destroy();
         this._name.destroy();
         this._activities?.container.show();
@@ -298,36 +298,26 @@ export default class LetheExtension extends Extension {
         } catch (e) {
             console.warn(`Lethe fonts: ${e.message}`);
         }
-        this._dock = new Dock(scale, this.dir);
+        // Motion. GNOME switches all animation off when there is no graphics card, and Lethe keeps it
+        // off while its autopilot reads the screen. Neither holds from here on: this VM draws well
+        // over sixty frames a second in software, so windows may open, close and move as designed.
+        new Gio.Settings({schema_id: 'org.gnome.desktop.interface'}).set_boolean('enable-animations', true);
+        this._animated = !St.Settings.get().enable_animations;
+        if (this._animated)
+            St.Settings.get().uninhibit_animations();
+        this._dock = new Dock(scale);
         this._bar = new TopBar(this.dir);
         this._clipboard = new Clipboard();
-        this._refreshAppGrid();
         // Lethe used the Looking Glass console once, to load this. Close it for the rest of the session.
         new Gio.Settings({schema_id: 'org.gnome.shell'}).set_boolean('development-tools', false);
-    }
-
-    // setup.sh gave some launchers a Lethe icon. The dock picks that up by itself; the app grid keeps
-    // the icons it drew at login, so the ones whose launcher changed are dropped and drawn again.
-    _refreshAppGrid() {
-        try {
-            const grid = Main.overview._overview.controls.appDisplay;
-            const apps = Shell.AppSystem.get_default();
-            for (const [id, icon] of [...grid._items]) {
-                if (icon.app && icon.app !== apps.lookup_app(id)) {
-                    grid._removeItem(icon);
-                    icon.destroy();
-                }
-            }
-            grid._redisplay();
-        } catch (e) {
-            console.warn(`Lethe app grid: ${e.message}`);
-        }
     }
 
     disable() {
         this._clipboard?.destroy();
         this._bar?.destroy();
         this._dock?.destroy();
+        if (this._animated)
+            St.Settings.get().inhibit_animations();
         this._clipboard = this._bar = this._dock = null;
         Main.layoutManager.uiGroup.remove_style_class_name('lethe');
     }

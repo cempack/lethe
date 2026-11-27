@@ -15,7 +15,7 @@ Layers, outside in:
   5. Display     QEMU never touches the desktop. It exposes raw pixels on a
                  private socket; the Lethe window draws them and feeds input back.
 """
-import fcntl, hashlib, io, json, os, re, resource, select, shutil, signal, socket, struct, subprocess, sys, tarfile, threading, time
+import fcntl, hashlib, json, os, re, resource, select, shutil, signal, socket, struct, subprocess, sys, threading, time
 
 from .wiper import hide, wipe
 
@@ -173,23 +173,6 @@ def update(progress=lambda text, fraction: None):
 
 
 # ── Config disc: a tiny read-only ISO 9660 image handed to the guest ─────────
-
-def _tar(folder):
-    """A folder as an uncompressed tar, with no owner, dates or modes from this computer."""
-    out = io.BytesIO()
-    with tarfile.open(fileobj=out, mode="w", format=tarfile.USTAR_FORMAT) as tar:
-        for root, dirs, files in os.walk(folder):
-            dirs.sort()
-            for name in sorted(dirs) + sorted(files):
-                path = os.path.join(root, name)
-                info = tar.gettarinfo(path, os.path.relpath(path, folder))
-                info.uid = info.gid = 0
-                info.uname = info.gname = ""
-                info.mtime, info.mode = 0, 0o755 if info.isdir() else 0o644
-                with open(path, "rb") if info.isfile() else io.BytesIO() as f:
-                    tar.addfile(info, f if info.isfile() else None)
-    return out.getvalue()
-
 
 def build_iso(label, files):
     """Minimal single-directory ISO 9660 image. `files` maps 8.3 NAMES to bytes."""
@@ -460,11 +443,9 @@ class Session:
                      "WALL.PNG": "assets/wallpaper.png",
                      "ONLINE.PNG": "assets/wallpaper-online.png", "INTER.TTF": "assets/Inter.ttf",
                      "EXT.JS": "guest/extension/extension.js", "EXT.CSS": "guest/extension/stylesheet.css",
-                     "EXT.JSN": "guest/extension/metadata.json", "MARK.SVG": "guest/extension/mark.svg",
-                     "APPS.SVG": "guest/icons/Lethe/scalable/apps/lethe-apps.svg"}
+                     "EXT.JSN": "guest/extension/metadata.json", "MARK.SVG": "guest/extension/mark.svg"}
             data = {n: open(os.path.join(LIB, p), "rb").read() for n, p in files.items()
                     if os.path.exists(os.path.join(LIB, p))}
-            data["ICONS.TAR"] = _tar(os.path.join(LIB, "guest", "icons"))
             # The host's display scale, so text in Tails comes out the size you are used to.
             data["SCALE.TXT"] = f"{max(1.0, min(3.0, float(cfg.get('scale', 1)))):.2f}\n".encode()
             with open(disc, "wb") as f:

@@ -559,10 +559,6 @@ class Window(Gtk.ApplicationWindow):
         bar.set_end_widget(end)
         self.folded = None
         page.append(bar)
-        self.alert = Gtk.Revealer(transition_type=Gtk.RevealerTransitionType.SLIDE_DOWN)
-        self.alert_text = label("", "banner", wrap=True, chars=80)
-        self.alert.set_child(self.alert_text)
-        page.append(self.alert)
         self.display = Display()
         self.display.on_paste = self.paste
         self.display.on_fullscreen = self._toggle_fullscreen
@@ -574,6 +570,14 @@ class Window(Gtk.ApplicationWindow):
         inner.append(label("The session reappears when the recording or screen share stops.", "caption", 0.5, wrap=True))
         self.curtain.append(inner)
         overlay.add_overlay(self.curtain)
+        # Messages float over the top of the picture. They take no room of their own, so Tails is
+        # never resized to make way for one.
+        self.alert = Gtk.Revealer(transition_type=Gtk.RevealerTransitionType.CROSSFADE, transition_duration=220,
+                                  halign=Gtk.Align.CENTER, valign=Gtk.Align.START, margin_top=14,
+                                  margin_start=20, margin_end=20, can_target=False)
+        self.alert_text = label("", "toast", 0.5, wrap=True, chars=64)
+        self.alert.set_child(self.alert_text)
+        overlay.add_overlay(self.alert)
         page.append(overlay)
         return page
 

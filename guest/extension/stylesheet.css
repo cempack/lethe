@@ -32,3 +32,7 @@
                                                          background-color: rgba(245, 245, 247, 0.85); offset-y: -0.42em; }
 .lethe .dash-label { background-color: #1e2026; border: 1px solid rgba(255, 255, 255, 0.10); border-radius: 0.6em;
                      padding: 0.35em 0.75em; font-weight: 500; -y-offset: 0.5em; }
+
+/* The overview and its search field, in the same graphite as everything else. */
+.lethe #overviewGroup { background-color: #0d0e12; }
+.lethe .search-entry { background-color: rgba(255, 255, 255, 0.07); border-radius: 0.9em; }

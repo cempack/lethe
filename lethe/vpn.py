@@ -101,6 +101,9 @@ def main():
     cmd = sys.argv[1] if len(sys.argv) > 1 else ""
     if os.geteuid() != 0:
         sys.exit("lethe-vpn: must run as root")
+    # The caller's file mask does not apply here. Lethe keeps its own files private (mask 077), but
+    # it must be able to read which profile is installed; only the key file is root's alone.
+    os.umask(0o022)
     if cmd == "import":
         name = re.sub(r"[^A-Za-z0-9 ._-]", "", sys.argv[2] if len(sys.argv) > 2 else "")[:40] or "WireGuard"
         try:
@@ -108,6 +111,7 @@ def main():
         except ValueError as e:
             sys.exit(f"lethe-vpn: {e}")
         os.makedirs(ETC, mode=0o755, exist_ok=True)
+        os.chmod(ETC, 0o755)
         fd = os.open(f"{ETC}/wg.conf", os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)   # holds the private key
         with os.fdopen(fd, "w") as f:
             f.write(conf)
@@ -115,6 +119,8 @@ def main():
             json.dump({"addresses": addrs, "mtu": mtu}, f)
         with open(f"{ETC}/vpn.name", "w") as f:
             f.write(name + "\n")
+        for public in ("wg.json", "vpn.name"):
+            os.chmod(f"{ETC}/{public}", 0o644)
         run("systemctl", "restart", "lethe-vpn.service", check=False)
     elif cmd == "remove":
         run("systemctl", "stop", "lethe-vpn.service", check=False)
