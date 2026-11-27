@@ -1,0 +1,234 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Lethe · A private session that leaves no memory</title>
+  <meta name="description" content="Lethe runs Tails in a sealed, amnesic virtual machine inside one window, connects it to Tor, and erases every trace when you are done. Made for journalists.">
+  <meta name="color-scheme" content="dark">
+  <meta name="theme-color" content="#07080b">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Lethe">
+  <meta property="og:description" content="A private session that leaves no memory. Tails in a sealed, amnesic virtual machine, in one window.">
+  <meta property="og:image" content="/assets/og.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="preload" href="/fonts/Inter.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="/style.css?v=1">
+</head>
+<body>
+  <header class="nav">
+    <div class="wrap nav-inner">
+      <a class="brand" href="#top">
+        <img src="/assets/logo.svg" alt="" width="26" height="26">
+        <span>Lethe</span>
+      </a>
+      <nav class="nav-right" aria-label="Sections">
+        <a class="nav-link" href="#session">A session</a>
+        <a class="nav-link" href="#protection">Protection</a>
+        <a class="nav-link" href="#journalists">For journalists</a>
+        <a class="nav-cta" href="#install">Install</a>
+      </nav>
+    </div>
+  </header>
+
+  <section class="hero" id="top">
+    <canvas class="sky" aria-hidden="true"></canvas>
+    <div class="wrap hero-text">
+      <p class="eyebrow">Tails · Tor · nothing left behind</p>
+      <h1>A private session that leaves no memory.</h1>
+      <p class="lead">Lethe runs Tails in a sealed virtual machine inside one window, connects it to Tor, and erases every trace of it when you are done.</p>
+      <div class="command" data-copy="gh repo clone cempack/lethe &amp;&amp; ./lethe/install.sh">
+        <code><span class="prompt">$</span> gh repo clone cempack/lethe &amp;&amp; ./lethe/install.sh</code>
+        <button class="copy" type="button">Copy</button>
+      </div>
+      <p class="platforms">Arch · Debian · Ubuntu · Fedora · openSUSE</p>
+    </div>
+    <p class="hint" aria-hidden="true">Drag the moon</p>
+  </section>
+
+  <main class="show wrap" id="session">
+    <div class="rail">
+      <section class="chapter" id="one-click" data-act="Start" data-title="One click">
+        <div class="chapter-text">
+          <p class="act">Start</p>
+          <h2>One click.</h2>
+          <p>No USB stick, no reboot, no setup screens. Lethe checks that this computer is safe to start on, and waits for you.</p>
+        </div>
+        <figure class="shot app"><img src="/assets/home.webp" width="896" height="1372" alt="The Lethe launcher: the moon emblem, a Start Session button, and the status Protected, 8 of 8."></figure>
+      </section>
+
+      <section class="chapter" id="starting" data-act="Start" data-title="The careful part">
+        <div class="chapter-text">
+          <p class="act">Start</p>
+          <h2>It does the careful part itself.</h2>
+          <p>It verifies the Tails signature, builds the sandbox, passes the Welcome Screen and connects to Tor. About a minute.</p>
+        </div>
+        <figure class="shot wide"><img src="/assets/launch.webp" width="2048" height="1400" loading="lazy" alt="Starting your session: signature verified, sandbox built, network opened, Tails started, now hardening."></figure>
+      </section>
+
+      <section class="chapter" id="tails" data-act="Work" data-title="Tails, in a window">
+        <div class="chapter-text">
+          <p class="act">Work</p>
+          <h2>Tails, in a window.</h2>
+          <p>The real, signed Tails, at your screen's own resolution. It follows the window as you resize it, and <kbd>Ctrl</kbd> <kbd>Alt</kbd> <kbd>F</kbd> gives it the whole screen.</p>
+        </div>
+        <figure class="shot session">
+          <div class="lbar" aria-hidden="true"><span class="lbar-start"><img src="/assets/logo.svg" alt="" width="14" height="14"><b>Private Session</b><i>01:24</i></span><span class="lbar-facts"><u></u>Firewall<s></s>Tor<s></s>Sentinel</span><span class="lbar-end">End Session</span></div>
+          <img src="/assets/desktop.webp" width="1880" height="1078" loading="lazy" alt="A Lethe session: the Tails desktop with its dock, over a wallpaper of the moon on still water.">
+        </figure>
+      </section>
+
+      <section class="chapter" id="tor" data-act="Work" data-title="Through Tor, or not at all">
+        <div class="chapter-text">
+          <p class="act">Work</p>
+          <h2>Through Tor, or not at all.</h2>
+          <p>Tor Browser opens at its Safest level. The session has no other way out: your network, and this computer, are out of its reach.</p>
+        </div>
+        <figure class="shot session">
+          <div class="lbar" aria-hidden="true"><span class="lbar-start"><img src="/assets/logo.svg" alt="" width="14" height="14"><b>Private Session</b><i>04:07</i></span><span class="lbar-facts"><u></u>Firewall<s></s>Tor<s></s>Sentinel</span><span class="lbar-end">End Session</span></div>
+          <img src="/assets/browser.webp" width="1880" height="1078" loading="lazy" alt="Tor Browser open inside the session.">
+        </figure>
+      </section>
+
+      <section class="chapter" id="clipboard" data-act="Work" data-title="One-way clipboard">
+        <div class="chapter-text">
+          <p class="act">Work</p>
+          <h2>Bring things in. Nothing comes out.</h2>
+          <p>Copy on your computer, paste in Tails: text and images. It travels one way, on a read-only disc. What a password manager copies is never shared.</p>
+        </div>
+        <figure class="shot session">
+          <div class="lbar" aria-hidden="true"><span class="lbar-start"><img src="/assets/logo.svg" alt="" width="14" height="14"><b>Private Session</b><i>09:52</i></span><span class="lbar-facts"><u></u>Firewall<s></s>Tor<s></s>Sentinel</span><span class="lbar-end">End Session</span></div>
+          <img src="/assets/clipboard.webp" width="1880" height="1078" loading="lazy" alt="A note copied on the computer, pasted into the Text Editor inside Tails.">
+        </figure>
+      </section>
+
+      <section class="chapter" id="checks" data-act="Protect" data-title="Checked every time">
+        <div class="chapter-text">
+          <p class="act">Protect</p>
+          <h2>Eight protections, checked every time.</h2>
+          <p>No disk. Memory kept out of swap. A firewall that only lets the public internet through. Each one is verified on this machine before a session may start.</p>
+        </div>
+        <figure class="shot app"><img src="/assets/protection.webp" width="896" height="1372" loading="lazy" alt="The Protection page: Tails image verified, hardware isolation, memory locked, network firewalled, display isolated, sleep guarded, integrity sealed."></figure>
+      </section>
+
+      <section class="chapter" id="tripwire" data-act="Protect" data-title="A tripwire">
+        <div class="chapter-text">
+          <p class="act">Protect</p>
+          <h2>A tripwire while you work.</h2>
+          <p>A debugger attaches. Someone logs in remotely. A keyboard appears that was not there. The session is destroyed at once, and you are told why.</p>
+        </div>
+        <figure class="shot app"><img src="/assets/threat.webp" width="896" height="1372" loading="lazy" alt="Threat detected: a new keyboard was connected, the session was destroyed, 4.0 GB of memory overwritten."></figure>
+      </section>
+
+      <section class="chapter" id="vpn" data-act="Protect" data-title="A VPN for this window">
+        <div class="chapter-text">
+          <p class="act">Protect</p>
+          <h2>A VPN for this window only.</h2>
+          <p>Import a WireGuard profile and the tunnel becomes the session's only route. If it drops, nothing leaves. The rest of your computer is untouched.</p>
+        </div>
+        <figure class="shot app"><img src="/assets/settings.webp" width="896" height="1372" loading="lazy" alt="Settings: connect to Tor automatically, route the session through a VPN, WireGuard profile, and session options."></figure>
+      </section>
+
+      <section class="chapter" id="end" data-act="End" data-title="Then it never happened">
+        <div class="chapter-text">
+          <p class="act">End</p>
+          <h2>Then it never happened.</h2>
+          <p>End the session and its memory is overwritten with zeros, even if Lethe itself is killed. Nothing was ever written to disk.</p>
+        </div>
+        <figure class="shot app"><img src="/assets/end.webp" width="896" height="1372" loading="lazy" alt="Session destroyed: 4.0 GB of memory overwritten, disk untouched, Tails image unmodified."></figure>
+      </section>
+    </div>
+
+    <div class="stage">
+      <div class="window" aria-hidden="true"><div class="frames"></div></div>
+      <div class="dock">
+        <p class="dock-label"><span class="dock-count"></span><span class="dock-title"></span></p>
+        <div class="dock-bar"></div>
+        <div class="dock-nav">
+          <button type="button" data-step="-1" aria-label="Previous">←</button>
+          <button type="button" data-step="1" aria-label="Next">→</button>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <section class="band" id="journalists">
+    <div class="wrap">
+      <p class="act">For journalists</p>
+      <h2 class="band-title">Made for the work that cannot leave a trail.</h2>
+      <div class="trio">
+        <article>
+          <h3>Talk to a source</h3>
+          <p>A workspace that exists only in memory. There is no virtual disk to seize, image or recover, and the session dies before the computer sleeps.</p>
+        </article>
+        <article>
+          <h3>Open what you were sent</h3>
+          <p>Documents open inside a sandboxed machine with no path to your files, your network or your desktop. What happens in the session stays in it.</p>
+        </article>
+        <article>
+          <h3>Research without a profile</h3>
+          <p>Every connection goes through Tor from a system that looks like every other Tails. No history, no cookies, no account of what you read.</p>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <section class="band" id="protection">
+    <div class="wrap">
+      <p class="act">Protection</p>
+      <h2 class="band-title">Eight layers. Each one does one thing.</h2>
+      <div class="grid">
+        <article><img src="/assets/icons/memory.svg" alt="" width="22" height="22"><h3>Amnesia</h3><p>No disk. Memory is locked out of swap and crash dumps, zero-filled on exit, and wiped by a separate guard if Lethe is killed.</p></article>
+        <article><img src="/assets/icons/check.svg" alt="" width="22" height="22"><h3>Integrity</h3><p>The Tails image is checked against the pinned Tails signing key before every start. Lethe's own files are root-owned and compared with a manifest.</p></article>
+        <article><img src="/assets/icons/isolation.svg" alt="" width="22" height="22"><h3>Sandbox</h3><p>QEMU and KVM inside bubblewrap: no home folder, no desktop socket, no D-Bus, no capabilities, no nested namespaces.</p></article>
+        <article><img src="/assets/icons/integrity.svg" alt="" width="22" height="22"><h3>Memory privacy</h3><p>Lethe, the machine and the wipe guard are closed to your other programs: no debugger, no reading their memory.</p></article>
+        <article><img src="/assets/icons/network.svg" alt="" width="22" height="22"><h3>Network</h3><p>The machine has no network of its own. A separate relay carries its traffic behind a kernel firewall: public internet only.</p></article>
+        <article><img src="/assets/icons/shield.svg" alt="" width="22" height="22"><h3>VPN before Tor</h3><p>An optional WireGuard tunnel that only this session can use, and that is its only route. Your provider sees a VPN, the VPN only sees Tor.</p></article>
+        <article><img src="/assets/icons/display.svg" alt="" width="22" height="22"><h3>Display</h3><p>The machine never touches your desktop. Its picture reaches Lethe over a private link; no audio, no USB, no shared folders.</p></article>
+        <article><img src="/assets/icons/sentinel.svg" alt="" width="22" height="22"><h3>Sentinel</h3><p>Watches this computer during a session and destroys it at the first sign of tampering. Hides it while your screen is recorded.</p></article>
+      </div>
+
+      <div class="limits">
+        <h3>What it cannot do</h3>
+        <ul>
+          <li><b>Protect you from a compromised computer.</b> If its kernel or firmware belongs to someone else, they see everything. For that threat, boot Tails from a USB stick on a machine you trust.</li>
+          <li><b>Hide that you use it.</b> Lethe and the Tails image are on your disk. What you did in a session is not.</li>
+          <li><b>Hide Tor from your network,</b> unless you use the VPN option or Tor bridges.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section class="band install" id="install">
+    <div class="wrap">
+      <p class="act">Install</p>
+      <h2 class="band-title">Two commands.</h2>
+      <div class="command" data-copy="gh repo clone cempack/lethe &amp;&amp; ./lethe/install.sh">
+        <code><span class="prompt">$</span> gh repo clone cempack/lethe &amp;&amp; ./lethe/install.sh</code>
+        <button class="copy" type="button">Copy</button>
+      </div>
+      <div class="command" data-copy="lethe">
+        <code><span class="prompt">$</span> lethe</code>
+        <button class="copy" type="button">Copy</button>
+      </div>
+      <p class="after">Then press <b>Start Session</b>. <code>lethe doctor</code> checks every protection on your machine, and <code>./install.sh --uninstall</code> removes everything.</p>
+    </div>
+  </section>
+
+  <footer class="footer">
+    <div class="wrap footer-inner">
+      <p class="footer-brand"><img src="/assets/logo.svg" alt="" width="20" height="20">Lethe</p>
+      <p>Security audit and hardening pass by Claude Mythos 5.2. Lethe is not part of the Tails project.</p>
+      <p class="footer-links">
+        <a href="https://github.com/cempack/lethe">GitHub</a>
+        <a href="https://tails.net">Tails</a>
+        <a href="https://elliotmoreau.fr">Elliot Moreau</a>
+      </p>
+    </div>
+  </footer>
+
+  <script src="/moon.js?v=1" defer></script>
+  <script src="/main.js?v=1" defer></script>
+</body>
+</html>
