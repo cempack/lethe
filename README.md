@@ -93,7 +93,7 @@ Tails itself is hardened on the way in: Tor Browser at its Safest level, no usag
 
 </details>
 
-The website lives in [`site/`](site): a static page with the same moon, live. Preview it with `python3 -m http.server -d site`, or build `site/Dockerfile`.
+Website: **[lethe.elliotmoreau.fr](https://lethe.elliotmoreau.fr)**. Its source is in [`site/`](site): a static page with the same moon, live.
 
 ---
 
