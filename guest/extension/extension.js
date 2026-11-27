@@ -1,6 +1,6 @@
 // Lethe for GNOME Shell: the desktop of a Lethe session.
 //
-//  - a dock along the bottom: GNOME's own dash, kept on the desktop instead of hidden in the overview;
+//  - a dock along the bottom: GNOME's own dash, kept on the desktop; it slides away under maximised windows;
 //  - the Lethe mark and the active app's name at the start of the top bar;
 //  - the receiving end of Lethe's one-way clipboard. Lethe puts what you copied on your computer
 //    on a read-only disc labelled LETHECLIP; this mounts it, hands the text or image to the
@@ -11,6 +11,7 @@ import Clutter from 'gi://Clutter';
 import Gio from 'gi://Gio';
 import GObject from 'gi://GObject';
 import GLib from 'gi://GLib';
+import Meta from 'gi://Meta';
 import Shell from 'gi://Shell';
 import St from 'gi://St';
 
@@ -37,6 +38,13 @@ class LetheDash extends Dash {
         grid.setIconSize(size);     // ...and draw ours
     }
 
+    // A right-click menu is open on one of the icons (the dock must not slide away under it).
+    _itemMenuStateChanged(item, opened) {
+        super._itemMenuStateChanged(item, opened);
+        this.menuOpen = opened;
+        this.onMenu?.();
+    }
+
     resize(size) {
         if (size !== this._size) {
             this._size = size;
@@ -60,11 +68,17 @@ class LetheDash extends Dash {
     }
 });
 
+// Where the dock is and when. It floats over the desktop and takes no room from windows. When a
+// window on this workspace is maximised it slides away, and comes back while the pointer rests on
+// the bottom edge of the screen, or on the dock itself.
 class Dock {
     constructor(scale, dir) {
         this._scale = scale;
+        this._shown = true;
+        this._timers = new Map();
         this._dash = new LetheDash(this._size(), Gio.icon_new_for_string(dir.get_child('apps.svg').get_path()));
         this._dash.add_style_class_name('lethe-dock');
+        this._dash.onMenu = () => this._soon('sync', 100);
         this._dash.showAppsButton.connectObject('notify::checked', button => {
             if (button.checked)
                 Main.overview.showApps();
@@ -72,18 +86,41 @@ class Dock {
                 Main.overview.hide();
         }, this);
 
-        this.actor = new St.Bin({child: this._dash, x_align: Clutter.ActorAlign.CENTER, y_align: Clutter.ActorAlign.END});
-        // Windows maximise above the dock, and it steps aside for full-screen apps.
-        Main.layoutManager.addChrome(this.actor, {affectsStruts: true, trackFullscreen: true});
+        this.actor = new St.Bin({child: this._dash, reactive: true, track_hover: true});
+        this._edge = new St.Widget({reactive: true, track_hover: true});
+        for (const actor of [this.actor, this._edge])
+            Main.layoutManager.addChrome(actor, {affectsStruts: false, trackFullscreen: true});
+        this.actor.connect('notify::hover', () => this._soon('sync', this.actor.hover ? 0 : 350));
+        // Resting on the edge calls the dock; merely passing over it does not.
+        this._edge.connect('notify::hover', () => this._soon('sync', this._edge.hover ? 150 : 350));
+
+        const later = () => this._soon('sync', 120);
+        global.window_manager.connectObject('size-changed', later, 'minimize', later, 'unminimize', later,
+            'map', later, 'destroy', later, 'switch-workspace', later, this);
+        global.display.connectObject('restacked', later, this);
         Main.layoutManager.connectObject('monitors-changed', () => this._place(), this);
-        Main.overview.connectObject(
-            'showing', () => this.actor.hide(),
-            'hidden', () => {
-                this._dash.showAppsButton.checked = false;
-                this.actor.show();
-            }, this);
-        this._dash.connectObject('notify::height', () => this._place(), this);
+        Main.overview.connectObject('showing', () => this._sync(), 'hidden', () => {
+            this._dash.showAppsButton.checked = false;
+            this._sync();
+        }, this);
+        this._dash.connectObject('notify::height', () => this._place(), 'notify::width', () => this._place(), this);
         this._place();
+        // It always shows itself for a moment when the session starts, whatever is on screen.
+        this._hello = true;
+        this._soon('hello', 4000, () => {
+            this._hello = false;
+            this._sync();
+        });
+    }
+
+    _soon(name, ms, run = () => this._sync()) {
+        if (this._timers.has(name))
+            GLib.source_remove(this._timers.get(name));
+        this._timers.set(name, GLib.timeout_add(GLib.PRIORITY_DEFAULT, ms, () => {
+            this._timers.delete(name);
+            run();
+            return GLib.SOURCE_REMOVE;
+        }));
     }
 
     // 48 px at the screen's scale, less when the session window is narrow: the dock never takes
@@ -99,14 +136,63 @@ class Dock {
         if (!m)
             return;
         this._dash.resize(this._size());
+        const [, width] = this._dash.get_preferred_width(-1);
         const [, height] = this._dash.get_preferred_height(-1);
-        this.actor.set_position(m.x, m.y + m.height - height);
-        this.actor.set_size(m.width, height);
+        this.actor.set_position(m.x + Math.floor((m.width - width) / 2), m.y + m.height - height);
+        this.actor.set_size(width, height);
+        this._edge.set_position(m.x, m.y + m.height - 2);
+        this._edge.set_size(m.width, 2);
+        if (!this._shown)
+            this.actor.translation_y = height;
+    }
+
+    // A window that reaches from the top of the screen to the bottom would sit under the dock.
+    _covered() {
+        const workspace = global.workspace_manager.get_active_workspace();
+        const primary = Main.layoutManager.primaryIndex;
+        const tall = w => w.maximized_vertically ?? ((w.get_maximize_flags?.() ?? 0) & Meta.MaximizeFlags.VERTICAL) !== 0;
+        return global.get_window_actors().some(actor => {
+            const w = actor.meta_window;
+            return w && !w.minimized && w.get_window_type() === Meta.WindowType.NORMAL &&
+                w.get_monitor() === primary && w.located_on_workspace(workspace) && tall(w);
+        });
+    }
+
+    _sync() {
+        if (Main.overview.visible)            // the overview has the dash of its own
+            return this._slide(false, 0);
+        const wanted = this.actor.hover || this._edge.hover || this._dash.menuOpen;
+        this._slide(this._hello || wanted || !this._covered(), 180);
+    }
+
+    _slide(shown, ms) {
+        const actor = this.actor;
+        if (shown === this._shown && actor.visible === shown)
+            return;
+        this._shown = shown;
+        if (shown)
+            actor.show();
+        // Lethe turns GNOME's own animations off (they cost more than they give in a VM without a
+        // graphics card); this one small slide is done by hand.
+        actor.save_easing_state();
+        actor.set_easing_mode(Clutter.AnimationMode.EASE_OUT_CUBIC);
+        actor.set_easing_duration(actor.mapped ? ms : 0);
+        actor.translation_y = shown ? 0 : actor.height;
+        actor.restore_easing_state();
+        if (!shown)
+            this._soon('hide', ms + 30, () => !this._shown && actor.hide());
+        else if (this._timers.has('hide'))
+            this._soon('hide', 0, () => {});
     }
 
     destroy() {
+        for (const id of this._timers.values())
+            GLib.source_remove(id);
+        global.window_manager.disconnectObject(this);
+        global.display.disconnectObject(this);
         Main.layoutManager.disconnectObject(this);
         Main.overview.disconnectObject(this);
+        this._edge.destroy();
         this.actor.destroy();
     }
 }

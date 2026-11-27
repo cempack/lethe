@@ -1,10 +1,10 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
 <defs>
-  <linearGradient id="t" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#625c52"/><stop offset="1" stop-color="#36322b"/></linearGradient>
-  <linearGradient id="r" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity="0.30"/><stop offset="0.5" stop-color="#fff" stop-opacity="0.05"/><stop offset="1" stop-color="#fff" stop-opacity="0.02"/></linearGradient>
-  <linearGradient id="i" gradientUnits="userSpaceOnUse" x1="0" y1="3" x2="0" y2="21"><stop offset="0" stop-color="#fae4b5"/><stop offset="1" stop-color="#f3c35a"/></linearGradient>
+  <linearGradient id="t" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3a93dc"/><stop offset="1" stop-color="#165c9e"/></linearGradient>
+  <linearGradient id="r" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity="0.34"/><stop offset="0.5" stop-color="#fff" stop-opacity="0.06"/><stop offset="1" stop-color="#000" stop-opacity="0.10"/></linearGradient>
+  <filter id="s" x="-20%" y="-20%" width="140%" height="150%"><feDropShadow dx="0" dy="0.450" stdDeviation="0.450" flood-color="#000" flood-opacity="0.22"/></filter>
 </defs>
 <rect x="7" y="7" width="114" height="114" rx="27" fill="url(#t)"/>
 <rect x="7.500" y="7.500" width="113" height="113" rx="26.500" fill="none" stroke="url(#r)"/>
-<g transform="translate(28 28) scale(3)" fill="none" stroke="url(#i)" stroke-width="1.700" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 12a8.5 8.5 0 1 0 17.0 0a8.5 8.5 0 1 0 -17.0 0z" opacity="1"/><path d="M9.8 8h3a2 2 0 0 1 0 4h-3z M9.8 12h3.5a2 2 0 0 1 0 4H9.8z M11.4 6.5V8 M11.4 16v1.5" opacity="1"/></g>
+<g transform="translate(19.600 19.600) scale(3.700)" filter="url(#s)"><g transform="translate(12 12)" fill="none" stroke="#fff" stroke-width="1.150" opacity="0.8"><ellipse rx="8.300" ry="3.300"/><ellipse rx="8.300" ry="3.300" transform="rotate(60)"/><ellipse rx="8.300" ry="3.300" transform="rotate(120)"/></g><path d="M7.9 12a4.1 4.1 0 1 0 8.2 0a4.1 4.1 0 1 0 -8.2 0z" fill="#fff" opacity="1"/><path d="M10.700 9.800h1.700a1.100 1.100 0 0 1 0 2.200h-1.700z M10.700 12h2.100a1.100 1.100 0 0 1 0 2.200h-2.100z M11.500 9v.800 M11.500 14.200v.800" fill="none" stroke="#2675ba" stroke-width="1.05" stroke-linecap="round" stroke-linejoin="round" opacity="1" /></g>
 </svg>

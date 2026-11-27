@@ -7,5 +7,5 @@
 <path d="M12 30a9 9 0 0 1 9-9h27l10 10h49a9 9 0 0 1 9 9v10H12z" fill="url(#b)"/>
 <rect x="12" y="38" width="104" height="72" rx="10" fill="url(#f)"/>
 <rect x="12.500" y="38.500" width="103" height="71" rx="9.500" fill="none" stroke="url(#r)"/>
-<g transform="translate(43.600 53.600) scale(1.700)" fill="none" stroke="#141b2b" stroke-opacity="0.72" stroke-width="1.900" stroke-linecap="round" stroke-linejoin="round"><path d="M13.5 3.5H8a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V8z M13.5 3.5V8H18 M9 13h6 M9 16.500h4"/></g>
+<g transform="translate(43.600 53.600) scale(1.700)" fill="none" stroke="#141b2b" stroke-opacity="0.72" stroke-width="1.900" stroke-linecap="round" stroke-linejoin="round"><path d="M13.500 3.500H8a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V8z M13.500 3.500V8H18 M9 13h6 M9 16.500h4"/></g>
 </svg>

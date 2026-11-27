@@ -1,10 +1,10 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
 <defs>
-  <linearGradient id="t" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#64535e"/><stop offset="1" stop-color="#372c33"/></linearGradient>
-  <linearGradient id="r" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity="0.30"/><stop offset="0.5" stop-color="#fff" stop-opacity="0.05"/><stop offset="1" stop-color="#fff" stop-opacity="0.02"/></linearGradient>
-  <linearGradient id="i" gradientUnits="userSpaceOnUse" x1="0" y1="3" x2="0" y2="21"><stop offset="0" stop-color="#ffc9d9"/><stop offset="1" stop-color="#ff86ab"/></linearGradient>
+  <linearGradient id="t" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#dba93e"/><stop offset="1" stop-color="#9c6c14"/></linearGradient>
+  <linearGradient id="r" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity="0.34"/><stop offset="0.5" stop-color="#fff" stop-opacity="0.06"/><stop offset="1" stop-color="#000" stop-opacity="0.10"/></linearGradient>
+  <filter id="s" x="-20%" y="-20%" width="140%" height="150%"><feDropShadow dx="0" dy="0.450" stdDeviation="0.450" flood-color="#000" flood-opacity="0.22"/></filter>
 </defs>
 <rect x="7" y="7" width="114" height="114" rx="27" fill="url(#t)"/>
 <rect x="7.500" y="7.500" width="113" height="113" rx="26.500" fill="none" stroke="url(#r)"/>
-<g transform="translate(28 28) scale(3)" fill="none" stroke="url(#i)" stroke-width="1.700" stroke-linecap="round" stroke-linejoin="round"><path d="M3.500 11.600V5.500a2 2 0 0 1 2-2h6.100l8.300 8.300a2 2 0 0 1 0 2.800l-5.300 5.300a2 2 0 0 1-2.800 0z" opacity="1"/><path d="M7.8 7.8h.01" opacity="0.9"/><path d="M11 11l4 4 M15 11l-4 4" opacity="0.55"/></g>
+<g transform="translate(19.600 19.600) scale(3.700)" filter="url(#s)"><path d="M7.200 16.600c-.500-1.300-.700-2.700-.700-4.100a5.500 5.500 0 0 1 11 0c0 1.800-.200 3.500-.700 5" fill="none" stroke="#fff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" opacity="1" /><path d="M9.500 18.300c-.500-1.800-.800-3.700-.800-5.800a3.300 3.300 0 0 1 6.600 0c0 2.300-.300 4.400-1 6.300" fill="none" stroke="#fff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" opacity="1" /><path d="M12 12.500c0 2.300-.200 4.400-.700 6.300" fill="none" stroke="#fff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" opacity="1" /><path transform="translate(15.200 1.300) scale(0.300)" d="M12 1l3 8 8 3-8 3-3 8-3-8-8-3 8-3z" fill="#fff"/></g>
 </svg>

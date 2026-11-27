@@ -1,19 +1,20 @@
-#!/usr/bin/env python3
 """Draws Lethe's icon theme for Tails into guest/icons/Lethe.
 
-One language for every app, the one the Lethe mark already speaks: a graphite
-tile with a hairline of light along its top edge, and a single line drawing on
-it. Each app draws in its own colour, and that colour is breathed faintly into
-its tile: the set stays one family in the dark, and every app can still be
-found by colour alone. Glyphs are drawn on a 24-unit grid with a round stroke;
-a second, fainter layer gives them depth. Folders are brushed steel, with their purpose
-engraved.
+Every app keeps what makes it recognisable: its own emblem and its own colour (Tor Browser's
+purple rings, Thunderbird's blue envelope, the green sheet of Calc, GIMP's Wilber). What changes
+is the drawing. Each emblem is redrawn flat and simple, in white, on a tile of the app's colour
+with the outline of the Lethe mark: one shape, one weight, one light from above, for all of them.
+A second colour appears only where the original depends on it (the pencil, the flame, the star).
+
+Emblems are drawn on a 24-unit grid. "{cut}" in a drawing is the tile's own colour, for details
+cut into a white shape. Folders are steel blue, with their purpose engraved.
 
 Run it after changing a drawing; the SVGs it writes are what ships.
 """
 import os
 
 OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "guest", "icons", "Lethe")
+CUT = "{cut}"
 
 
 def C(cx, cy, r):
@@ -27,101 +28,157 @@ def R(x, y, w, h, r):
             f"a{r} {r} 0 0 1 {-r} {-r}v{-(h - 2 * r)}a{r} {r} 0 0 1 {r} {-r}z")
 
 
-def dots(*points):
-    return " ".join(f"M{x} {y}h.01" for x, y in points)
+def P(d, fill="#fff", o=1):
+    """A filled shape."""
+    return f'<path d="{d}" fill="{fill}" opacity="{o}"/>'
 
 
-GLOBE = [C(12, 12, 8.5) + " M3.5 12h17", ("M12 3.5c-2.6 2.4-3.9 5.2-3.9 8.5s1.3 6.1 3.9 8.5 M12 3.5c2.6 2.4 3.9 5.2 3.9 8.5s-1.3 6.1-3.9 8.5", 0.55)]
-PAGE = "M13.5 3.5H8a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V8z M13.5 3.5V8H18"
-DISC = C(12, 12, 8.5)
-BOX = "M12 3.5l7.5 4.2v8.6L12 20.5l-7.5-4.2V7.7z"
-LOCK = R(5.5, 10.5, 13, 9.5, 2.5)
-BUBBLE = "M6 4.5h12a2.5 2.5 0 0 1 2.5 2.5v6.5A2.5 2.5 0 0 1 18 16h-5.5L8 20v-4H6a2.5 2.5 0 0 1-2.5-2.5V7A2.5 2.5 0 0 1 6 4.5z"
-CYLINDER = "M4.5 6.5c0-1.7 3.4-3 7.5-3s7.5 1.3 7.5 3-3.4 3-7.5 3-7.5-1.3-7.5-3z M4.5 6.5v11c0 1.7 3.4 3 7.5 3s7.5-1.3 7.5-3v-11"
+def S(d, w=1.8, stroke="#fff", o=1, more=""):
+    """A line."""
+    return (f'<path d="{d}" fill="none" stroke="{stroke}" stroke-width="{w}" stroke-linecap="round" '
+            f'stroke-linejoin="round" opacity="{o}" {more}/>')
 
-# name: [layer, ...]; a layer is a path, or (path, opacity) for the fainter second voice.
+
+def dots(points, r, fill=CUT):
+    return "".join(P(C(x, y, r), fill) for x, y in points)
+
+
+GOLD = "#ffd257"
+PAGE = "M13.500 3.500H8a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V8z M13.500 3.500V8H18"      # engraved on the Documents folder
+BULB = "M12 6.2c-4.3 1.7-6.6 4.2-6.6 7.6a6.6 6.6 0 0 0 13.2 0c0-3.4-2.3-5.900-6.600-7.600z"
+SHEET = "M7 3.800h7.200l4.300 4.300v10.100a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V5.800a2 2 0 0 1 2-2z"       # LibreOffice's page
+EAR = P("M14.200 3.800v2.800a1.500 1.500 0 0 0 1.500 1.500h2.800z", CUT, 0.5)
+ENVELOPE = lambda x, y, w, h: P(R(x, y, w, h, 2.1)) + S(f"M{x + 0.7} {y + 1.7}l{w / 2 - 0.7} {h * 0.44} {w / 2 - 0.7} {-h * 0.44}", 1.35, CUT)
+BUBBLE = "M6 4.500h12a2.500 2.500 0 0 1 2.500 2.500v6.500A2.500 2.500 0 0 1 18 16h-5.500L8 20v-4H6a2.500 2.500 0 0 1-2.500-2.500V7A2.500 2.500 0 0 1 6 4.500z"
+STAR = "M12 3.800l2.500 5.200 5.700.800-4.100 4 1 5.700-5.100-2.700-5.100 2.700 1-5.700-4.100-4 5.700-.800z"
+PADLOCK = (S("M8.300 10.500V8.200a3.700 3.700 0 0 1 7.400 0v2.300", 1.9) + P(R(5.800, 10.300, 12.400, 9.500, 2.400))
+           + P(C(12, 14.200, 1.400), CUT) + P("M11.300 14.800h1.400l.500 2.600h-2.400z", CUT))
+GEAR = ('<g transform="translate(12 12)">'
+        + "".join(f'<rect x="-1.900" y="-8.700" width="3.800" height="5" rx="1.100" fill="#fff" transform="rotate({a})"/>' for a in range(0, 360, 45))
+        + f'<circle r="6.100" fill="#fff"/><circle r="2.600" fill="{CUT}"/></g>')
+
+# name: (tile colour at the top, at the bottom, the emblem)
 APPS = {
-    # ── the network ──
-    "lethe-tor-browser": GLOBE,
-    "lethe-unsafe-browser": GLOBE + ["M4.5 4.5l15 15"],
-    "tor-connection": ["M12 6.5c-4.2 1.6-6.5 4-6.5 7.4a6.5 6.5 0 0 0 13 0c0-3.4-2.3-5.8-6.5-7.4z M12 6.5c0-1.7.9-2.8 2.4-3.3",
-                       ("M12 10.2c-2 .9-3.1 2.2-3.1 3.9a3.1 3.1 0 0 0 6.2 0c0-1.7-1.1-3-3.1-3.9z", 0.55)],
-    "onioncircuits": [C(12, 5.5, 2) + C(5.5, 17.5, 2) + C(18.5, 17.5, 2), ("M10.9 7.2L6.6 15.8 M13.1 7.2l4.3 8.6 M7.5 17.5h9", 0.55)],
-    "org.onionshare.OnionShare": ["M12 15V4 M7.8 8.2L12 4l4.2 4.2", ("M4.5 13.5V17a3 3 0 0 0 3 3h9a3 3 0 0 0 3-3v-3.5", 0.55)],
-    "thunderbird": [R(3.5, 5.5, 17, 13, 2.5), ("M4.2 7.6l7.8 5.6 7.8-5.6", 0.55)],
-    "pidgin": [BUBBLE, (dots((8.5, 10.3), (12, 10.3), (15.5, 10.3)), 0.7)],
-    "whisperback": [BUBBLE, "M12 7.6v3.2 " + dots((12, 13.4))],
-    "electrum": [C(12, 12, 8.5), "M9.8 8h3a2 2 0 0 1 0 4h-3z M9.8 12h3.5a2 2 0 0 1 0 4H9.8z M11.4 6.5V8 M11.4 16v1.5"],
+    # ── Tor and the network ──
+    "lethe-tor-browser": ("#9257c9", "#4f2488",        # the Tor Browser mark: rings, the right half filled in
+        S(C(12, 12, 7.600), 1.500) + P("M12 4.400a7.600 7.600 0 0 1 0 15.200z", o=0.30) + S(C(12, 12, 4.600), 1.500)
+        + P("M12 7.400a4.600 4.600 0 0 1 0 9.200z", o=0.50) + P(C(12, 12, 1.900))),
+    "tor-connection": ("#7b4a96", "#3d1f52",           # the onion
+        P(BULB) + S("M12 9.400c-2.200 1.200-3.400 2.700-3.400 4.500a3.400 3.400 0 0 0 6.800 0c0-1.800-1.200-3.300-3.400-4.500z M12 12.500v4.700", 1.300, CUT)
+        + S("M12 6.200c0-1.900.900-3 2.600-3.600", 1.700)),
+    "onioncircuits": ("#8552a8", "#45225e",            # an onion under the magnifying glass
+        S("M10.300 6.300c-3.500 1.400-5.300 3.400-5.300 6.200 0 2.600 1.800 4.700 4.300 5.200 M10.300 6.300c2.300.900 4 2.100 4.800 3.600 M10.300 6.300c0-1.500.700-2.400 2-2.800", 1.600)
+        + P(C(15.200, 14.700, 3.300), o=0.25) + S(C(15.200, 14.700, 3.300), 1.700) + S("M17.700 17.200l2.600 2.600", 2.100)),
+    "org.onionshare.OnionShare": ("#9146a6", "#501f60",
+        S("M5.800 12a6.200 6.200 0 0 1 10.500-4.500", 2) + P("M17.900 4.300v4.600h-4.600z")
+        + S("M18.200 12a6.200 6.200 0 0 1-10.500 4.500", 2) + P("M6.100 19.700v-4.600h4.600z") + P(C(12, 12, 1.600))),
+    "lethe-unsafe-browser": ("#e6a626", "#a86c0a",     # the warning sign
+        P("M12 4.200c.600 0 1.100.300 1.400.800l6.700 11.600c.600 1.100-.200 2.400-1.400 2.400H5.300c-1.200 0-2-1.300-1.400-2.400l6.700-11.600c.300-.500.800-.800 1.400-.800z")
+        + S("M12 9.300v4.300", 2, CUT) + P(C(12, 16.200, 1.100), CUT)),
+    "thunderbird": ("#3f97ee", "#1757c0",              # the envelope under the bird's wing
+        ENVELOPE(4, 8, 16, 11) + S("M4.800 6.300c3-3.200 9.500-3.600 13.800.200", 1.800, o=0.75)),
+    "pidgin": ("#8163c8", "#47308e",                   # the pigeon, talking
+        P(BUBBLE) + dots([(9.500, 9.700), (14.500, 9.700)], 1.150) + P("M10.500 12h3L12 14.200z", "#ffb02e")),
+    "whisperback": ("#9da43e", "#5d621a",
+        ENVELOPE(3.600, 8.200, 14.500, 10.500)
+        + f'<path transform="translate(11.300 0.800) scale(0.520)" d="{STAR}" fill="{GOLD}"/>'),
+    "electrum": ("#3a93dc", "#165c9e",                 # the atom, with the coin at its heart
+        '<g transform="translate(12 12)" fill="none" stroke="#fff" stroke-width="1.150" opacity="0.8"><ellipse rx="8.300" ry="3.300"/>'
+        '<ellipse rx="8.300" ry="3.300" transform="rotate(60)"/><ellipse rx="8.300" ry="3.300" transform="rotate(120)"/></g>'
+        + P(C(12, 12, 4.100)) + S("M10.700 9.800h1.700a1.100 1.100 0 0 1 0 2.200h-1.700z M10.700 12h2.100a1.100 1.100 0 0 1 0 2.200h-2.100z M11.500 9v.800 M11.500 14.200v.800", 1.050, CUT)),
     # ── files and documents ──
-    "org.gnome.Nautilus": ["M3.5 7.5a2 2 0 0 1 2-2h3.6l2 2h7.4a2 2 0 0 1 2 2v7.5a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2z", ("M3.5 11h17", 0.5)],
-    "org.gnome.TextEditor": ["M5 19l.8-3.6L16.4 4.8a1.9 1.9 0 0 1 2.8 2.8L8.6 18.2z", ("M14.4 6.8l2.8 2.8 M12.5 19.5h7", 0.55)],
-    "org.gnome.Evince": ["M12 6.6C10 5.2 7.4 4.6 4 4.6v12.8c3.4 0 6 .6 8 2 2-1.4 4.600-2 8-2V4.6c-3.400 0-6 .6-8 2z", ("M12 6.600v12.800", 0.55)],
-    "org.gnome.Loupe": [R(3.5, 4.5, 17, 15, 3), (C(8.6, 9.4, 1.5) + " M20.300 14.800l-4.200-4.200L6.600 19.300", 0.6)],
-    "org.gnome.FileRoller": [R(3.5, 4.5, 17, 4.5, 1.5) + " M5.200 9v8.500a2 2 0 0 0 2 2h9.600a2 2 0 0 0 2-2V9", ("M10 13h4", 0.6)],
-    "org.gnome.SimpleScan": [R(3.5, 12, 17, 7.500, 2.200) + " M5 9.200l14 2.800", (dots((7, 15.800)) + " M11 15.800h6", 0.6)],
-    "fr.romainvigier.MetadataCleaner": ["M3.500 11.600V5.500a2 2 0 0 1 2-2h6.100l8.300 8.300a2 2 0 0 1 0 2.800l-5.300 5.300a2 2 0 0 1-2.800 0z", (dots((7.800, 7.800)), 0.9),
-                                        ("M11 11l4 4 M15 11l-4 4", 0.55)],
-    "bookletimposer": ["M12 6.200L5 4.500v13.300l7 1.700 7-1.700V4.500z", ("M12 6.200v13.300 M7.500 8.800l2 .5 M7.500 12l2 .5 M16.500 8.800l-2 .5 M16.500 12l-2 .5", 0.5)],
-    "libreoffice-startcenter": ["M12.500 3.500H9a2 2 0 0 0-2 2V16a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V10z M12.500 3.500V10H19", ("M4.500 8v10.500a2 2 0 0 0 2 2H15", 0.5)],
-    "libreoffice-writer": [PAGE, ("M9 12h6 M9 15h6 M9 18h3.500", 0.6)],
-    "libreoffice-calc": [R(3.500, 4.500, 17, 15, 2.500), ("M3.500 9.500h17 M3.500 14.500h17 M9.500 9.500v10", 0.55)],
-    "libreoffice-impress": [R(3.500, 4.500, 17, 11.500, 2.500) + " M12 16v4 M8.500 20h7", ("M8.500 12.500v-2 M12 12.500v-4.500 M15.500 12.500v-3", 0.65)],
-    "libreoffice-draw": [C(9, 9, 5), (R(10.500, 10.500, 9.500, 9.500, 2.200), 0.6)],
+    "org.gnome.Nautilus": ("#4a9bf0", "#1f5fc4",       # the filing cabinet
+        P(R(5.500, 3.800, 13, 16.400, 2.400)) + S("M5.500 12h13", 1.200, CUT) + S("M10.200 8h3.600 M10.200 16h3.600", 1.600, CUT)),
+    "org.gnome.TextEditor": ("#4fa8ee", "#1f6cc6",     # the page and the pencil
+        P(R(4.800, 3.800, 11.600, 16.400, 2)) + S("M7.500 8h6.200 M7.500 11h4.200 M7.500 14h2.500", 1.250, CUT)
+        + P("M12.600 18.900l.800-3.500 5.900-5.900a1.800 1.800 0 0 1 2.600 2.600l-5.900 5.900z", GOLD)),
+    "org.gnome.Evince": ("#e44c42", "#a8211c",
+        P(R(5.500, 3.800, 13, 16.400, 2)) + S("M8.300 8.300h4 M8.300 11.500h7.400 M8.300 14.700h7.400", 1.300, CUT)),
+    "org.gnome.Loupe": ("#d4548e", "#8c2462",
+        P(R(3.800, 5, 16.400, 14, 2.600)) + P(C(8.600, 9.600, 1.500), CUT) + P("M5.600 16.800l4.300-4.800 2.800 2.900 2.200-2 3.500 3.900z", CUT)),
+    "org.gnome.FileRoller": ("#b58050", "#744c24",     # the box with a zip
+        P(R(4.500, 5, 15, 14.500, 2.200)) + S("M4.500 9.800h15", 1.200, CUT)
+        + S("M12 5v4.800", 1.500, CUT, more='stroke-dasharray="0.01 2.200"') + P(R(10.900, 10.500, 2.200, 3.800, 0.800), CUT)),
+    "org.gnome.SimpleScan": ("#33a79e", "#136a62",
+        S("M5 8.600l13.600 2.800", 1.900) + P(R(3.800, 11.500, 16.400, 7.500, 2.200)) + S("M6.800 15.300h7", 1.300, CUT) + P(C(16.800, 15.300, 0.900), CUT)),
+    "fr.romainvigier.MetadataCleaner": ("#dba93e", "#9c6c14",   # a fingerprint, wiped clean
+        S("M7.200 16.600c-.500-1.300-.700-2.700-.700-4.100a5.500 5.500 0 0 1 11 0c0 1.800-.200 3.500-.700 5", 1.600)
+        + S("M9.500 18.300c-.500-1.800-.800-3.700-.800-5.800a3.300 3.300 0 0 1 6.600 0c0 2.300-.300 4.400-1 6.300", 1.600) + S("M12 12.500c0 2.300-.200 4.400-.700 6.300", 1.600)
+        + '<path transform="translate(15.200 1.300) scale(0.300)" d="M12 1l3 8 8 3-8 3-3 8-3-8-8-3 8-3z" fill="#fff"/>'),
+    "bookletimposer": ("#cb3a44", "#811a22",
+        P("M12 6.400C10.200 5.200 7.800 4.700 4.500 4.700v12.600c3.300 0 5.700.500 7.500 1.700 1.800-1.200 4.200-1.700 7.500-1.700V4.700c-3.300 0-5.700.500-7.500 1.700z")
+        + S("M12 6.400v12.500", 1.200, CUT) + S("M7 9c1 0 2 .200 2.800.500 M7 12c1 0 2 .200 2.800.500 M17 9c-1 0-2 .200-2.800.500 M17 12c-1 0-2 .200-2.800.500", 1.100, CUT, 0.7)),
+    "libreoffice-startcenter": ("#858b97", "#4b505b", P(SHEET) + EAR),
+    "libreoffice-writer": ("#3294e6", "#1560b4", P(SHEET) + EAR + S("M8 11.300h7.500 M8 14.200h7.500 M8 17.100h4.500", 1.300, CUT)),
+    "libreoffice-calc": ("#43b556", "#1c7a30", P(SHEET) + EAR + S("M8 11.200h7.500v6H8z M8 14.200h7.500 M11.750 11.200v6", 1.200, CUT)),
+    "libreoffice-impress": ("#ee6a30", "#b83f14", P(SHEET) + EAR + S("M8.400 17.300v-2.300 M11.750 17.300v-5.800 M15.100 17.300v-4", 1.700, CUT)),
+    "libreoffice-draw": ("#e6b53c", "#a87c12", P(SHEET) + EAR + P(C(10.300, 13.300, 2.400), CUT) + P(R(11.500, 13.300, 4.300, 4.300, 0.700), CUT, 0.7)),
     # ── media ──
-    "audacity": ["M4.500 10v4 M8.200 6.500v11 M12 3.500v17 M15.800 7.500v9 M19.500 10.500v3"],
-    "io.github.celluloid_player.Celluloid": [R(3.500, 5, 17, 14, 3), ("M10.200 9.200l4.800 2.800-4.800 2.800z", 0.75)],
-    "org.gnome.SoundRecorder": [R(9, 3.500, 6, 10.500, 3), ("M6 11.500a6 6 0 0 0 12 0 M12 17.500v3", 0.6)],
-    "org.gnome.SoundJuicer": [DISC, (C(12, 12, 2.300) + " M12 6.400a5.600 5.600 0 0 1 5.600 5.600", 0.6)],
-    "brasero": [C(11, 13, 7.500), (C(11, 13, 2), 0.6), "M18.500 3.500v4 M16.500 5.500h4"],
-    "gimp": ["M12 3.500a8.500 8.500 0 1 0 0 17c1.100 0 1.900-.800 1.900-1.900 0-.500-.200-.900-.500-1.300-.300-.300-.400-.700-.400-1.200 0-1 .800-1.900 1.900-1.900h1.800a3.800 3.800 0 0 0 3.800-3.800C20.500 6.600 16.700 3.500 12 3.500z",
-             (dots((7.600, 11.800), (9.800, 7.900), (14.200, 7.600)), 0.9)],
-    "org.inkscape.Inkscape": ["M12 20.500l-5.500-8 4-9h3l4 9z", (C(12, 12.500, 1.500) + " M12 14v6.500", 0.6)],
+    "audacity": ("#3b68ea", "#1c309e",                 # headphones around a waveform
+        S("M5.300 14.600v-2.400a6.700 6.700 0 0 1 13.400 0v2.400", 1.900) + P(R(3.600, 13, 3.700, 6.300, 1.500)) + P(R(16.700, 13, 3.700, 6.300, 1.500))
+        + S("M9.300 15.200v1.800 M11.100 13v6.200 M12.900 14.200v3.800 M14.700 15.400v1.400", 1.300, "#ffb02e")),
+    "io.github.celluloid_player.Celluloid": ("#5263d6", "#2a3090",
+        P(R(3.800, 5.500, 16.400, 13, 2.600)) + P("M10.200 9l5 3-5 3z", CUT)),
+    "org.gnome.SoundRecorder": ("#cf4a42", "#7d201a",
+        P(R(9, 3.600, 6, 10.400, 3)) + S("M6 11.300a6 6 0 0 0 12 0 M12 17.300v3 M9.300 20.300h5.400", 1.700)),
+    "org.gnome.SoundJuicer": ("#f29a30", "#ba5e10",    # a slice of orange
+        P(C(12, 12, 8)) + S(C(12, 12, 6.100), 1, CUT) + S("M12 6.200v11.600 M7 9.100l10 5.800 M7 14.900l10-5.800", 1.050, CUT) + P(C(12, 12, 1.300), CUT)),
+    "brasero": ("#ee8a30", "#b55412",                  # a disc, and the fire that writes it
+        P(C(11.300, 11.800, 7.500)) + P(C(11.300, 11.800, 2.300), CUT) + S("M11.300 6.900a4.900 4.900 0 0 1 4.900 4.900", 1.100, CUT, 0.45)
+        + P("M18.600 12.800c1.700 1.600 2.500 3.200 2.500 4.700a3.100 3.100 0 0 1-6.200 0c0-1.100.500-2 1.300-2.800.300.800.800 1.300 1.400 1.300.300-1.300.400-2.200 1-3.200z", GOLD)),
+    "gimp": ("#7d7468", "#463e35",                     # Wilber
+        P("M4.200 12.900c0-3.600 2.900-6.100 6.700-6.100 1.700 0 2.900.600 4.300.600 1.800 0 2.800-1.700 4.600-1.900.300 2.800-1.300 4.300-1.300 7.100 0 3.500-3.100 6-7.400 6s-6.900-2.300-6.900-5.700z")
+        + dots([(10.400, 11.100), (15, 11.100)], 2.150) + dots([(10.900, 11.300), (15.500, 11.300)], 0.850, "#fff")
+        + P("M5.400 14.400a1.600 1.250 0 1 0 3.200 0a1.600 1.250 0 1 0-3.200 0z", CUT)),
+    "org.inkscape.Inkscape": ("#535a68", "#1f2229",    # the mountain of ink
+        P("M12 3.700c.500 0 1 .200 1.400.600l6.400 6.400c.900.900.300 2.400-1 2.400H5.200c-1.300 0-1.900-1.500-1-2.400l6.400-6.400c.400-.400.900-.600 1.400-.600z")
+        + S("M8.600 9l1.800 1.300 1.600-1.500 1.600 1.500 1.800-1.300", 1.200, CUT)
+        + P("M7.300 15.300h9.400c.800 0 1.200.900.600 1.500-1.100 1-3 1.200-5.300 1.200s-4.200-.200-5.300-1.200c-.600-.600-.200-1.500.600-1.500z") + P(C(12, 20, 1))),
     # ── tools ──
-    "org.gnome.Console": [R(3.500, 4.500, 17, 15, 3), ("M7.300 9.500l3 2.500-3 2.500 M12.500 14.800h4", 0.75)],
-    "gvim": ["M8 7.500L3.500 12 8 16.500 M16 7.500l4.500 4.500-4.500 4.500", ("M13.600 5l-3.200 14", 0.6)],
-    "org.gnome.Calculator": [R(5.500, 3.500, 13, 17, 3), "M8.800 7.500h6.400", (dots((8.800, 11.800), (12, 11.800), (15.200, 11.800), (8.800, 15.800), (12, 15.800), (15.200, 15.800)), 0.75)],
-    "org.gnome.Settings": ["M4 6.500h8.800 M17.200 6.500H20 " + C(15, 6.500, 2.100) + " M4 17.500h2.800 M11.200 17.500H20 " + C(9, 17.500, 2.100),
-                           ("M4 12h16", 0.5)],
-    "org.gnome.SystemMonitor": ["M3.500 12.500h3.800l2.400-6.500 4.200 12.500 2.500-6h4.100"],
-    "org.gnome.DiskUtility": [R(3.500, 5.500, 17, 13, 3), ("M3.500 13.500h17 " + dots((7.200, 16), (10.200, 16)), 0.6)],
-    "org.gnome.Software": [R(4, 4, 6.800, 6.800, 2) + R(13.200, 4, 6.800, 6.800, 2) + R(4, 13.200, 6.800, 6.800, 2), ("M16.600 13.800v5.600 M13.800 16.600h5.600", 0.75)],
-    "synaptic": [BOX, ("M12 8.500v6.500 M9.300 12.400L12 15l2.700-2.600", 0.7)],
-    "lethe-additional-software": [BOX, ("M4.800 7.900L12 12l7.200-4.100 M12 12v8.300", 0.55)],
-    "ibus-setup": [R(2.500, 6, 19, 12, 3), (dots((6.500, 10), (10.200, 10), (13.800, 10), (17.500, 10)) + " M8 14h8", 0.7)],
-    "org.gnome.Tecla": [R(2.500, 6, 19, 12, 3), (dots((6.500, 10), (10.200, 10), (13.800, 10), (17.500, 10)) + " M8 14h8", 0.7)],
-    "org.gnome.Shell.Extensions": ["M9.500 4.500h5v3a2 2 0 1 0 4 0h1v5h-1.500a2 2 0 1 0 0 4H19.500v3h-15v-5H6a2 2 0 1 0 0-4H4.500v-3h5z"],
+    "org.gnome.Console": ("#474b56", "#17181c",
+        P(R(3.500, 5, 17, 14, 2.800), o=0.14) + S(R(3.500, 5, 17, 14, 2.800), 1.500) + S("M7.300 9.700l3.200 2.500-3.200 2.500 M12.700 15h4", 1.900)),
+    "gvim": ("#35a455", "#17682e", P("M4.500 5.500h4.800l2.700 8.200 2.700-8.200h4.800l-5.300 13.500H9.800z")),
+    "org.gnome.Calculator": ("#4d5766", "#262c36",
+        P(R(5.800, 3.800, 12.400, 16.400, 2.600)) + P(R(7.800, 5.800, 8.400, 3.500, 1), CUT)
+        + dots([(8.900, 12.300), (12, 12.300), (15.100, 12.300), (8.900, 16), (12, 16)], 1.150) + P(C(15.100, 16, 1.150), "#ff9f2e")),
+    "org.gnome.Settings": ("#939aa8", "#555b68", GEAR),
+    "org.gnome.SystemMonitor": ("#434956", "#1b1d24",
+        P(R(3.800, 5, 16.400, 13, 2.600), o=0.14) + S(R(3.800, 5, 16.400, 13, 2.600), 1.500)
+        + S("M6.300 12.300h2.600l1.600-3.500 2.900 6.700 1.700-3.200h2.600", 1.600, "#62e08c")),
+    "org.gnome.DiskUtility": ("#7f8795", "#454b57",
+        P(R(5, 3.800, 14, 16.400, 2.400)) + P(C(12, 10.300, 4.300), CUT) + P(C(12, 10.300, 1.100)) + S("M12.800 11.200l3.200 4.300", 1.300, CUT) + P(C(8.200, 17.500, 0.800), CUT)),
+    "org.gnome.Software": ("#5c72d4", "#2f4098",       # the shopping bag
+        S("M9 8.500V7a3 3 0 0 1 6 0v1.500", 1.700) + P("M6 8.300h12l1.200 10.400a1.500 1.500 0 0 1-1.500 1.700H6.300a1.500 1.500 0 0 1-1.500-1.700z")
+        + P(C(9.700, 13.300, 1.500), CUT) + P(R(12.600, 11.800, 3, 3, 0.500), CUT) + P("M10.400 18.200l1.700-2.900 1.700 2.900z", CUT)),
+    "synaptic": ("#c75a3e", "#7d2c18",
+        P("M12 3.700l7.400 4.100v8.400L12 20.300l-7.400-4.100V7.800z") + S("M4.900 8l7.100 3.900 7.100-3.900 M12 11.900v8", 1.200, CUT)),
+    "lethe-additional-software": ("#bd9058", "#7b5628",
+        P("M6.300 3.800h11.400l1.800 3.200h-15z", o=0.6) + P(R(4.500, 7, 15, 12.800, 2)) + S("M12 7v4.700", 2.400, CUT)),
+    "ibus-setup": ("#6d7686", "#3a404c",
+        P(R(2.800, 6.500, 18.400, 11, 2.400)) + dots([(6.500, 10.200), (9.250, 10.200), (12, 10.200), (14.750, 10.200), (17.500, 10.200)], 0.900) + S("M8 14h8", 1.700, CUT)),
     # ── help and about ──
-    "org.gnome.Yelp": [C(12, 12, 8.500), "M9.400 9.400a2.700 2.700 0 1 1 3.900 2.500c-.900.500-1.300 1.100-1.300 2.100 " + dots((12, 16.800))],
-    "lethe-about": [C(12, 12, 8.500), "M12 11v5.500 " + dots((12, 7.800))],
+    "org.gnome.Yelp": ("#ef5b4f", "#b62a22",           # the lifebuoy
+        S(C(12, 12, 6.100), 4.400) + f'<path d="{C(12, 12, 6.100)}" fill="none" stroke="{CUT}" stroke-width="4.400" stroke-dasharray="4.790 4.790" stroke-dashoffset="2.400"/>'),
+    "lethe-about": ("#6a4a9a", "#38205c", P(STAR, GOLD)),
     # ── secrets and storage ──
-    "org.gnome.World.Secrets": [C(8.200, 15.800, 4.300), "M11.300 12.700L19.500 4.500 M15.500 8.500l2.600 2.600 M18 6l1.800 1.800"],
-    "kleopatra": ["M12 3.500l7 2.700v5.300c0 4.300-2.800 7.700-7 9-4.200-1.300-7-4.700-7-9V6.200z", ("M9 12l2.200 2.200 4-4.200", 0.75)],
-    "unlock-veracrypt-volumes": [LOCK, "M8.500 10.500V7.800a3.500 3.500 0 0 1 6.800-1.200", ("M12 14.300v2.200", 0.75)],
-    "tails-persistent-storage": [CYLINDER, ("M4.500 12c0 1.700 3.400 3 7.500 3s7.500-1.300 7.500-3", 0.55)],
-    "tails-backup": ["M4.500 12a7.500 7.500 0 0 1 12.900-5.200L19.500 9 M19.500 4.500V9H15", ("M19.500 12a7.500 7.500 0 0 1-12.900 5.200L4.500 15 M4.500 19.500V15H9", 0.6)],
-    "tails-installer": [R(7, 9.500, 10, 11, 2.500), "M9.500 9.500v-6h5v6", (dots((11, 6.300), (13, 6.300)) + " M10 14.500h4", 0.7)],
+    "org.gnome.World.Secrets": ("#8560d6", "#46298f",  # the safe
+        P(R(4.500, 4.500, 15, 15, 3)) + S(C(12, 12, 3.900), 1.200, CUT) + P(C(12, 11.300, 1.300), CUT) + P("M11.350 11.800h1.300l.500 2.500h-2.300z", CUT)),
+    "kleopatra": ("#d94a3e", "#981f1a",                # the face under its fringe
+        P("M12 3.800a7.200 7.200 0 0 1 7.200 7.200v6.800c0 .900-.700 1.600-1.600 1.600H6.400c-.900 0-1.600-.700-1.600-1.600V11A7.200 7.200 0 0 1 12 3.800z", o=0.42)
+        + P("M8 11.500h8v2.700a4 4 0 0 1-8 0z") + P("M8 11.500c2.700 0 5-.900 6.300-2.800.500 1.300 1.100 2.200 1.700 2.800z", o=0.85)),
+    "unlock-veracrypt-volumes": ("#3e8fa0", "#1c5360",
+        S(C(8.300, 15.700, 3.200), 2.200) + S("M10.700 13.300l8.100-8.100 M15.800 8.200l2.300 2.300 M18.100 5.900l1.700 1.700", 2.200)),
+    "tails-persistent-storage": ("#8a4bb0", "#481f66", PADLOCK),
+    "tails-backup": ("#7a4aa8", "#3f2060",
+        f'<g transform="translate(-1.200 -1.600) scale(0.780)" opacity="0.5">{PADLOCK}</g><g transform="translate(6.400 6.200) scale(0.780)">{PADLOCK}</g>'),
+    "tails-installer": ("#5f9270", "#2e5540",          # the USB stick being written
+        P(R(9.300, 3.600, 5.400, 4.800, 0.900), o=0.7) + P(R(7.500, 7.600, 9, 12.800, 2.400)) + S("M12 11v5.300 M9.700 14.200l2.300 2.300 2.300-2.300", 1.600, CUT)),
+    # ── the dock's own button ──
+    "lethe-apps": ("#494a51", "#202125", dots([(x, y) for y in (7, 12, 17) for x in (7, 12, 17)], 1.250, "#fff")),
 }
-APPS["lethe-apps"] = ["".join(C(x, y, 0.550) for y in (7, 12, 17) for x in (7, 12, 17))]   # the dock's grid button
 
-# The palette: nine inks, all of one lightness, chosen to sit on graphite without shouting.
-INK = {"violet": "#a996ff", "blue": "#6fa8ff", "sky": "#62c6f2", "teal": "#54d1b6", "green": "#74d98a",
-       "amber": "#f3c35a", "orange": "#ff9f62", "rose": "#ff86ab", "red": "#ff6f66", "silver": "#dfe3ea"}
-COLOUR = {
-    "violet": ["lethe-tor-browser", "onioncircuits", "gimp", "tails-persistent-storage"],
-    "blue": ["org.gnome.Nautilus", "libreoffice-writer", "org.gnome.Software", "kleopatra"],
-    "sky": ["thunderbird", "org.gnome.Yelp", "org.gnome.SoundJuicer", "synaptic", "tails-installer"],
-    "teal": ["tor-connection", "org.gnome.Loupe", "org.inkscape.Inkscape", "tails-backup", "org.gnome.Shell.Extensions"],
-    "green": ["org.gnome.World.Secrets", "pidgin", "libreoffice-calc", "gvim", "org.gnome.SystemMonitor"],
-    "amber": ["org.gnome.TextEditor", "electrum", "org.gnome.FileRoller", "libreoffice-draw", "unlock-veracrypt-volumes",
-              "lethe-additional-software"],
-    "orange": ["whisperback", "bookletimposer", "libreoffice-impress", "audacity", "brasero", "org.gnome.Calculator"],
-    "rose": ["org.gnome.Evince", "fr.romainvigier.MetadataCleaner", "io.github.celluloid_player.Celluloid", "org.onionshare.OnionShare"],
-    "red": ["lethe-unsafe-browser", "org.gnome.SoundRecorder"],
-}
-INK_OF = {app: ink for ink, apps in COLOUR.items() for app in apps}       # everything else draws in silver
-
-# Launchers whose icon is a file path or a generic name: setup.sh points a copy of each at these.
-# (Icons named like "tails-backup.svg" need nothing: that is looked up as "tails-backup".)
+# Launchers whose icon is a file path or a general-purpose name: setup.sh points a copy of each at
+# these. (An icon named like "tails-backup.svg" needs nothing: that is looked up as "tails-backup".)
 LAUNCHERS = {"org.boum.tails.TorBrowser": "lethe-tor-browser", "unsafe-browser": "lethe-unsafe-browser",
              "org.boum.tails.AdditionalSoftware": "lethe-additional-software", "tails-about": "lethe-about"}
 
@@ -132,23 +189,16 @@ def mix(a, b, t):
     return "#" + "".join(f"{round(x + (y - x) * t):02x}" for x, y in zip(pa, pb))
 
 
-def tile(layers, ink="silver"):
-    hue = INK[ink]
-    tint = 0.30 if ink == "red" else 0.0 if ink == "silver" else 0.15
-    top, bottom = mix("#494a51", hue, tint), mix("#202125", hue, tint * 0.7)
-    glyph = ""
-    for layer in layers:
-        d, opacity = layer if isinstance(layer, tuple) else (layer, 1)
-        glyph += f'<path d="{d}" opacity="{opacity}"/>'
+def tile(top, bottom, emblem):
     return f"""<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
 <defs>
   <linearGradient id="t" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="{top}"/><stop offset="1" stop-color="{bottom}"/></linearGradient>
-  <linearGradient id="r" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity="0.30"/><stop offset="0.5" stop-color="#fff" stop-opacity="0.05"/><stop offset="1" stop-color="#fff" stop-opacity="0.02"/></linearGradient>
-  <linearGradient id="i" gradientUnits="userSpaceOnUse" x1="0" y1="3" x2="0" y2="21"><stop offset="0" stop-color="{mix(hue, '#ffffff', 0.55)}"/><stop offset="1" stop-color="{hue}"/></linearGradient>
+  <linearGradient id="r" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity="0.34"/><stop offset="0.5" stop-color="#fff" stop-opacity="0.06"/><stop offset="1" stop-color="#000" stop-opacity="0.10"/></linearGradient>
+  <filter id="s" x="-20%" y="-20%" width="140%" height="150%"><feDropShadow dx="0" dy="0.450" stdDeviation="0.450" flood-color="#000" flood-opacity="0.22"/></filter>
 </defs>
 <rect x="7" y="7" width="114" height="114" rx="27" fill="url(#t)"/>
 <rect x="7.500" y="7.500" width="113" height="113" rx="26.500" fill="none" stroke="url(#r)"/>
-<g transform="translate(28 28) scale(3)" fill="none" stroke="url(#i)" stroke-width="1.700" stroke-linecap="round" stroke-linejoin="round">{glyph}</g>
+<g transform="translate(19.600 19.600) scale(3.700)" filter="url(#s)">{emblem.replace(CUT, mix(top, bottom, 0.55))}</g>
 </svg>
 """
 
@@ -210,7 +260,7 @@ Context=Places
 def main():
     import shutil
     shutil.rmtree(OUT, ignore_errors=True)
-    sets = (("apps", {k: tile(v, INK_OF.get(k, "silver")) for k, v in APPS.items()}), ("places", {k: folder(v) for k, v in PLACES.items()}))
+    sets = (("apps", {k: tile(*v) for k, v in APPS.items()}), ("places", {k: folder(v) for k, v in PLACES.items()}))
     for sub, items in sets:
         d = os.path.join(OUT, "scalable", sub)
         os.makedirs(d, exist_ok=True)

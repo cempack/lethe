@@ -238,6 +238,7 @@ class Display(Gtk.Widget):
         k.connect("key-released", self._key, False)
         m = Gtk.EventControllerMotion()
         m.connect("motion", lambda _c, x, y: self._move(x, y))
+        m.connect("leave", lambda *_: self._left())
         c = Gtk.GestureClick(button=0)
         c.connect("pressed", lambda g, _n, x, y: self._click(g, x, y, True))
         c.connect("released", lambda g, _n, x, y: self._click(g, x, y, False))
@@ -327,9 +328,23 @@ class Display(Gtk.Widget):
         return True
 
     def _move(self, x, y):
+        self.last = (x, y)
         if self.control and self.texture:
             ox, oy, w, h = self._rect()
             self.control.move((x - ox) / w, (y - oy) / h)
+
+    def _left(self):
+        """The pointer went out over an edge of the picture. A fast hand skips the last few pixels,
+        but Tails must see it arrive at its screen edge: that is where its dock is called from."""
+        x, y = getattr(self, "last", (None, None))
+        if x is None or not (self.control and self.texture):
+            return
+        ox, oy, w, h = self._rect()
+        near = 24
+        fx = 0 if x - ox < near else 1 if ox + w - x < near else (x - ox) / w
+        fy = 0 if y - oy < near else 1 if oy + h - y < near else (y - oy) / h
+        if fx in (0, 1) or fy in (0, 1):
+            self.control.move(fx, fy)
 
     def _click(self, gesture, x, y, down):
         self.grab_focus()

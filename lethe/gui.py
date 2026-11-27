@@ -12,6 +12,7 @@ import hashlib, os, signal, subprocess, sys, threading, time, types
 
 from .widgets import (Column, Display, Gtk, GLib, Meter, Pango, box, button, check_row, clear, dot, icon_button,
                       image, label, log, margins, panel, set_state, setting_row, setup_style, ui, NEEDS_ALPHA)
+from gi.repository import Gdk, Gio          # versions are pinned in widgets
 from . import core, dbusdisplay, pilot, rfb, sentinel
 
 APP_ID = "org.lethe.App"
@@ -43,7 +44,7 @@ class Window(Gtk.ApplicationWindow):
         self.stack.set_size_request(*SIZE)
         self.set_child(self.stack)
         for name, page in (("home", self._home()), ("protection", self._protection()),
-                           ("settings", self._settings()), ("end", self._end())):
+                           ("settings", self._settings()), ("import", self._import_page()), ("end", self._end())):
             self.stack.add_named(page, name)
         self.viewer = self._viewer(app)
         self.clip_ready = False
@@ -121,11 +122,11 @@ class Window(Gtk.ApplicationWindow):
         page.append(margins(details, top=10))
         return page
 
-    def _subpage(self, title):
-        """A page behind the home page: a back button, a title, and a scrolling column."""
+    def _subpage(self, title, back="home"):
+        """A page behind another: a back button, a title, and a scrolling column."""
         page = box()
         head = box(False, 6, css="subhead")
-        head.append(icon_button("back", "Back", lambda: self.show("home")))
+        head.append(icon_button("back", "Back", lambda: self.show(back)))
         head.append(label(title, "subtitle"))
         page.append(head)
         col = box(css="subpage")
@@ -266,30 +267,88 @@ class Window(Gtk.ApplicationWindow):
         if core.vpn_profile():
             self._set("vpn", sw.get_active())
 
+    # Picking the profile happens inside Lethe: the desktop's own file dialog is a separate service
+    # that is not there on every system, and Lethe keeps itself closed to other programs anyway.
+    PROFILE_FOLDERS = ("Downloads", "Documents", "Desktop", "")
+
+    def _import_page(self):
+        page, col = self._subpage("Import a VPN Profile", back="settings")
+        col.append(margins(label("Choose a WireGuard profile, or drop one on this window. Lethe keeps its keys and "
+                                 "addresses; any commands written in it are discarded.", "caption", wrap=True, chars=40),
+                           start=4, bottom=14))
+        self.profiles = box(css="panel divided")
+        col.append(self.profiles)
+        self.no_profiles = label("No WireGuard profiles found in your home, Downloads, Documents or Desktop folders.",
+                                 "caption", wrap=True, chars=40)
+        col.append(margins(self.no_profiles, start=4))
+        col.append(margins(label("Or type where it is", "group-title"), top=20, bottom=8, start=4))
+        row = box(False, 8)
+        self.profile_path = Gtk.Entry(placeholder_text="/path/to/profile.conf", hexpand=True)
+        self.profile_path.connect("activate", lambda e: self._import_file(os.path.expanduser(e.get_text().strip())))
+        row.append(self.profile_path)
+        row.append(button("Import", "quiet", lambda: self._import_file(os.path.expanduser(self.profile_path.get_text().strip()))))
+        col.append(row)
+        self.import_error = label("", "caption critical", wrap=True, chars=40)
+        col.append(margins(self.import_error, top=10, start=4))
+        drop = Gtk.DropTarget.new(Gio.File, Gdk.DragAction.COPY)
+        drop.connect("drop", lambda _t, file, _x, _y: bool(file.get_path() and (self._import_file(file.get_path()) or True)))
+        page.add_controller(drop)
+        return page
+
+    @classmethod
+    def _find_profiles(cls):
+        """WireGuard profiles in the usual places: .conf files that have an [Interface] section."""
+        found = []
+        for folder in cls.PROFILE_FOLDERS:
+            base = os.path.join(os.path.expanduser("~"), folder)
+            try:
+                names = sorted(n for n in os.listdir(base) if n.lower().endswith(".conf"))
+            except OSError:
+                continue
+            for name in names[:200]:
+                path = os.path.join(base, name)
+                try:
+                    with open(path, "rb") as f:
+                        if b"[interface]" in f.read(4096).lower():
+                            found.append(path)
+                except OSError:
+                    pass
+        return found[:12]
+
     def _vpn_import(self):
         if not INSTALLED:
             return self.vpn_state.set_label("Run the installer first: the VPN needs its system service")
-        chooser = Gtk.FileChooserNative(title="Import a WireGuard Profile", transient_for=self,
-                                        action=Gtk.FileChooserAction.OPEN)
-        flt = Gtk.FileFilter()
-        flt.set_name("WireGuard profiles (*.conf)")
-        flt.add_pattern("*.conf")
-        chooser.add_filter(flt)
+        clear(self.profiles)
+        found = self._find_profiles()
+        for path in found:
+            row = box(False, 12)
+            text = box(spacing=3, hexpand=True)
+            name = label(os.path.basename(path), "headline")
+            name.set_ellipsize(Pango.EllipsizeMode.MIDDLE)
+            text.append(name)
+            text.append(label(os.path.dirname(path).replace(os.path.expanduser("~"), "~", 1), "caption"))
+            row.append(text)
+            row.append(image("chevron", 16))
+            item = Gtk.Button(child=row)
+            item.add_css_class("pick")
+            item.connect("clicked", lambda _b, p=path: self._import_file(p))
+            self.profiles.append(item)
+        self.profiles.set_visible(bool(found))
+        self.no_profiles.set_visible(not found)
+        self.profile_path.set_text("")
+        self.import_error.set_label("")
+        self.show("import")
 
-        def chosen(dialog, response):
-            if response == Gtk.ResponseType.ACCEPT:
-                path = dialog.get_file().get_path()
-                try:
-                    with open(path, "rb") as f:
-                        data = f.read(65537)          # read as the user; root only ever receives the bytes
-                except OSError as e:
-                    return self.vpn_state.set_label(f"Could not read the file: {e.strerror}")
-                self._vpn_helper(["import", os.path.splitext(os.path.basename(path))[0]], data)
-            self._chooser = None
-
-        chooser.connect("response", chosen)
-        self._chooser = chooser
-        chooser.show()
+    def _import_file(self, path):
+        try:
+            with open(path, "rb") as f:
+                data = f.read(65537)                  # read as the user; root only ever receives the bytes
+        except OSError as e:
+            return self.import_error.set_label(f"Could not read that file: {e.strerror}.")
+        if b"[interface]" not in data.lower():
+            return self.import_error.set_label("That is not a WireGuard profile.")
+        self.show("settings")
+        self._vpn_helper(["import", os.path.splitext(os.path.basename(path))[0]], data)
 
     def _vpn_helper(self, args, data):
         self.vpn_state.set_label("Waiting for authorisation…")
