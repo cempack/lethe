@@ -8,7 +8,7 @@ Pages are widget trees built once; `refresh` and the session thread only change
 their contents. Everything that touches GTK runs on the main thread: worker
 threads hand results over with `ui(...)`.
 """
-import hashlib, os, signal, subprocess, sys, threading, time, types
+import errno, hashlib, os, signal, stat, subprocess, sys, threading, time, types
 
 from .widgets import (Column, Display, Gtk, GLib, Meter, Pango, box, button, check_row, clear, dot, icon_button,
                       image, label, log, margins, panel, set_state, setting_row, setup_style, ui, NEEDS_ALPHA)
@@ -295,6 +295,18 @@ class Window(Gtk.ApplicationWindow):
         page.add_controller(drop)
         return page
 
+    @staticmethod
+    def _read_start(path, limit):
+        """The first bytes of a plain file. Anything else (a pipe, a device) is refused instead of
+        waited on: these names come from folders that other programs and downloads write to."""
+        fd = os.open(path, os.O_RDONLY | os.O_NONBLOCK | os.O_CLOEXEC)
+        try:
+            if not stat.S_ISREG(os.fstat(fd).st_mode):
+                raise OSError(errno.EINVAL, "Not a file")
+            return os.read(fd, limit)
+        finally:
+            os.close(fd)
+
     @classmethod
     def _find_profiles(cls):
         """WireGuard profiles in the usual places: .conf files that have an [Interface] section."""
@@ -308,9 +320,8 @@ class Window(Gtk.ApplicationWindow):
             for name in names[:200]:
                 path = os.path.join(base, name)
                 try:
-                    with open(path, "rb") as f:
-                        if b"[interface]" in f.read(4096).lower():
-                            found.append(path)
+                    if b"[interface]" in cls._read_start(path, 4096).lower():
+                        found.append(path)
                 except OSError:
                     pass
         return found[:12]
@@ -341,8 +352,7 @@ class Window(Gtk.ApplicationWindow):
 
     def _import_file(self, path):
         try:
-            with open(path, "rb") as f:
-                data = f.read(65537)                  # read as the user; root only ever receives the bytes
+            data = self._read_start(path, 65537)      # read as the user; root only ever receives the bytes
         except OSError as e:
             return self.import_error.set_label(f"Could not read that file: {e.strerror}.")
         if b"[interface]" not in data.lower():
@@ -408,7 +418,8 @@ class Window(Gtk.ApplicationWindow):
             more.set_label(extra if k == key else "")
 
     def launch(self):
-        self.cfg = core.settings()
+        # With the settings this window shows, not a fresh read of the file: another program can
+        # rewrite the file (it is yours), but not switch the VPN off behind a switch that shows it on.
         self.threat = None
         outdated = bool(not core.current_iso() or (self.latest and self.latest != core.current_version()))
         harden = self.cfg["skip_welcome"] and self.cfg["harden_guest"]
@@ -684,15 +695,24 @@ class Window(Gtk.ApplicationWindow):
         self._fact("sentinel", self.cfg["sentinel"], "Sentinel" if self.cfg["sentinel"] else "Sentinel off",
                    "Watching your computer: the session is destroyed at the first sign of tampering"
                    if self.cfg["sentinel"] else "Turned off in Preferences")
-        good = firewalled and self.cfg["sentinel"]
+        sealed = bool(self.session and self.session.sealed)
+        good = firewalled and self.cfg["sentinel"] and sealed
         set_state(self.state_dot, "ok" if good else "warn")
         self.capsule.set_tooltip_text(None if core.has_kvm() else "Running without hardware acceleration: slower")
+        notes = []
         if manual:
-            self._warn("The Welcome Screen could not be passed automatically. Continue by hand: "
-                       "press Start Tails if you see it.")
+            notes.append("The Welcome Screen could not be passed automatically. Continue by hand: "
+                         "press Start Tails if you see it.")
+        elif autopilot and autopilot.harden and not autopilot.hardened:
+            notes.append("Tails could not be hardened automatically: it runs with its own defaults, and "
+                         "Tor Browser is not at Safest.")
         elif autopilot and autopilot.connect and autopilot.hardened and not autopilot.online:
-            self._warn("Tor did not connect within three minutes. The Tor Connection window is open so you can "
-                       "try again or use a bridge.")
+            notes.append("Tor did not connect within three minutes. The Tor Connection window is open so you can "
+                         "try again or use a bridge.")
+        if not sealed:
+            notes.append("This session's memory is not closed to your other programs on this system.")
+        if notes:
+            self._warn(" ".join(notes), 20)
         self.display.control = self.control
         self.show("live")
         self.display.grab_focus()
@@ -852,7 +872,7 @@ class Window(Gtk.ApplicationWindow):
             self._ending()
             self._ended("You ended the session", 4 << 30, 754, False, False)
         elif page == "live":
-            self._go_live(False, False, types.SimpleNamespace(online=True, connect=True, hardened=True))
+            self._go_live(False, False, types.SimpleNamespace(online=True, connect=True, harden=True, hardened=True))
         if page in ("launch", "live"):
             self.vstack.set_transition_type(Gtk.StackTransitionType.NONE)
             self.vstack.set_visible_child_name(page)

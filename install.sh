@@ -134,11 +134,11 @@ EOF
   fi
 fi
 
-# An imported VPN profile: its name and addresses are readable (Lethe shows them), its key is not.
+# An imported VPN profile: its name is readable (Lethe shows it), its key and addresses are not.
 if $SUDO test -d /etc/lethe; then
   $SUDO chmod 755 /etc/lethe
-  for f in wg.json vpn.name; do $SUDO test -f /etc/lethe/$f && $SUDO chmod 644 /etc/lethe/$f; done
-  $SUDO test -f /etc/lethe/wg.conf && $SUDO chmod 600 /etc/lethe/wg.conf
+  for f in wg.conf wg.json; do if $SUDO test -f /etc/lethe/$f; then $SUDO chmod 600 /etc/lethe/$f; fi; done
+  if $SUDO test -f /etc/lethe/vpn.name; then $SUDO chmod 644 /etc/lethe/vpn.name; fi
 fi
 
 if [[ -d /run/systemd/system ]]; then
@@ -241,7 +241,9 @@ EOF
 
   say "Enabling the daily background Tails update"
   # The updater talks to the internet, so it runs in a box of its own: it sees the folder the
-  # image lives in and nothing else of your home, and cannot write anywhere else.
+  # image lives in and nothing else of your home, and cannot write anywhere else. Its runtime
+  # folder is an empty one of its own: the real one holds the sockets of your desktop, through
+  # which a program can ask for anything to be run outside this box.
   install -d -m 0700 "${XDG_DATA_HOME:-$HOME/.local/share}/lethe"
   IMAGES='%h/.local/share/lethe'
   [[ -n ${XDG_DATA_HOME:-} ]] && IMAGES="$XDG_DATA_HOME/lethe"
@@ -259,7 +261,8 @@ IOSchedulingClass=idle
 NoNewPrivileges=yes
 ProtectSystem=strict
 ProtectHome=tmpfs
-BindPaths=$IMAGES %t
+BindPaths=$IMAGES
+TemporaryFileSystem=%t:mode=0700
 PrivateTmp=yes
 PrivateDevices=yes
 ProtectKernelTunables=yes

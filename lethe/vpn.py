@@ -102,7 +102,8 @@ def main():
     if os.geteuid() != 0:
         sys.exit("lethe-vpn: must run as root")
     # The caller's file mask does not apply here. Lethe keeps its own files private (mask 077), but
-    # it must be able to read which profile is installed; only the key file is root's alone.
+    # it must be able to read which profile is installed. Its name is all it needs: the key and
+    # the tunnel's addresses are root's alone.
     os.umask(0o022)
     if cmd == "import":
         name = re.sub(r"[^A-Za-z0-9 ._-]", "", sys.argv[2] if len(sys.argv) > 2 else "")[:40] or "WireGuard"
@@ -112,15 +113,14 @@ def main():
             sys.exit(f"lethe-vpn: {e}")
         os.makedirs(ETC, mode=0o755, exist_ok=True)
         os.chmod(ETC, 0o755)
-        fd = os.open(f"{ETC}/wg.conf", os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)   # holds the private key
-        with os.fdopen(fd, "w") as f:
-            f.write(conf)
-        with open(f"{ETC}/wg.json", "w") as f:
-            json.dump({"addresses": addrs, "mtu": mtu}, f)
+        for secret, text in (("wg.conf", conf), ("wg.json", json.dumps({"addresses": addrs, "mtu": mtu}))):
+            fd = os.open(f"{ETC}/{secret}", os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW, 0o600)
+            with os.fdopen(fd, "w") as f:
+                os.fchmod(fd, 0o600)                  # also when the file was already there
+                f.write(text)
         with open(f"{ETC}/vpn.name", "w") as f:
             f.write(name + "\n")
-        for public in ("wg.json", "vpn.name"):
-            os.chmod(f"{ETC}/{public}", 0o644)
+        os.chmod(f"{ETC}/vpn.name", 0o644)
         run("systemctl", "restart", "lethe-vpn.service", check=False)
     elif cmd == "remove":
         run("systemctl", "stop", "lethe-vpn.service", check=False)

@@ -51,17 +51,17 @@ Runs on Arch/Omarchy, Debian 12+, Ubuntu 24.04+, Fedora and openSUSE. Uninstall 
 
 - **Talk to a source, open a leak, research a story** in a workspace that exists only in memory. There is no virtual disk to seize or recover.
 - **One click.** No USB stick, no reboot, no Welcome Screen, no Tor setup. Your own keyboard layout just works.
-- **Bring things in, never out.** What you copy on your computer can be pasted in Tails (text and images). Nothing copied in Tails ever reaches your computer, and passwords from a password manager are never shared.
-- **A tripwire while you work.** The session is destroyed at once if a debugger attaches, someone logs in remotely, or a new keyboard is plugged in. It hides itself while your screen is being recorded.
+- **Bring things in, never out.** What you copy on your computer can be pasted in Tails (text and images). Nothing copied in Tails ever reaches your computer, and what a password manager marks as a secret is never shared.
+- **A tripwire while you work.** The session is destroyed at once if a debugger attaches, someone logs in remotely, or a new keyboard is plugged in. On Hyprland, it hides itself while your screen is being shared or recorded.
 
 ## What protects a session
 
 | | |
 |---|---|
 | **Amnesia** | No disk. Guest memory is locked out of swap and crash dumps, zero-filled on exit, and wiped by a separate guard process even if Lethe is killed. The session dies before the computer sleeps. |
-| **Integrity** | The Tails image is checked against the pinned Tails signing key before every start. Lethe's own files are root-owned and compared with a manifest. |
+| **Integrity** | The Tails image is checked against the pinned Tails signing key before every start, then held so that nothing can change it while Tails runs from it. Lethe's own files are root-owned and compared with a manifest. |
 | **Sandbox** | QEMU/KVM inside bubblewrap: no home folder, no desktop socket, no D-Bus, no capabilities, no nested namespaces. |
-| **Memory privacy** | Lethe, the VM and the wipe guard are closed to your other programs: no debugger, no reading their memory through `/proc`. |
+| **Memory privacy** | Lethe, the sandbox, the VM and the wipe guard are closed to your other programs from the first moment of a session: no debugger, no reading their memory, no taking their open files. Lethe checks this on every start and tells you if your system cannot do it. |
 | **Network** | The VM has no network of its own. A separate relay carries its traffic behind a kernel firewall: public internet only, never your LAN or this computer. |
 | **VPN before Tor** | Optional WireGuard profile, for the VM only. The tunnel is its only route: if it drops, nothing leaves. |
 | **Display** | The VM never touches your desktop. Its picture reaches Lethe over a private link; clipboard goes one way, on a read-only disc. |
@@ -76,7 +76,8 @@ Tails itself is hardened on the way in: Tor Browser at its Safest level, no usag
 
 - **Protect you from a compromised computer.** If the host's kernel or firmware is controlled by someone else, they see everything. For that threat, boot Tails from a USB stick on a machine you trust.
 - **Hide that you use it.** The Tails image and Lethe are on your disk. Session content is not.
-- **Wipe everything.** Main guest memory is zero-filled; small device buffers are freed, not wiped. Booting the host with `init_on_free=1` closes that gap.
+- **Wipe everything.** Main guest memory is zero-filled. Small device buffers, and the copies of Tails' screen that Lethe and your graphics driver held to draw it, are freed, not wiped. Booting the host with `init_on_free=1` closes that gap.
+- **Stop a program that already runs as you from using your desktop.** Lethe closes the session's memory and controls to your other programs. It cannot stop one of them from disturbing the session (it can always end it), nor from asking your desktop for a picture of the screen or sending it keystrokes, on desktops that allow this without asking you.
 - **Hide Tor from your network**, unless you use the VPN option or Tor bridges.
 
 </details>
