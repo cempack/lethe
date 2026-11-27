@@ -116,7 +116,9 @@ systemctl --user stop tails-virt-notify-user.service 2>/dev/null
 cp "$D/wall.png" "$HOME/.lethe-wallpaper.png" && {
   g org.gnome.desktop.background picture-uri "file://$HOME/.lethe-wallpaper.png"
   g org.gnome.desktop.background picture-uri-dark "file://$HOME/.lethe-wallpaper.png"
-  g org.gnome.desktop.background picture-options zoom
+  # Centred, never scaled: the picture is dithered, cell by cell, and is larger than any screen.
+  g org.gnome.desktop.background picture-options centered
+  g org.gnome.desktop.background primary-color '#07080b'
   g org.gnome.desktop.screensaver picture-uri "file://$HOME/.lethe-wallpaper.png"
 }
 

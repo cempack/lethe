@@ -3,6 +3,8 @@
 
 /* Top bar: no band. Its text rests directly on the dark upper sky of the wallpaper. */
 .lethe #panel { background-color: rgba(8, 9, 12, 0.35); font-weight: 500; }
+/* Tor has just connected: the bar glows steel for a few seconds (Lethe's autopilot reads this). */
+.lethe #panel.lethe-online { background-color: rgba(92, 106, 146, 0.42); }
 .lethe #panel .panel-button { font-weight: 500; color: rgba(245, 245, 247, 0.92); border-radius: 0.6em;
                               -natural-hpadding: 0.7em; -minimum-hpadding: 0.4em; }
 .lethe #panel .panel-button:hover, .lethe #panel .panel-button:focus { box-shadow: inset 0 0 0 100px rgba(255, 255, 255, 0.10); }

@@ -14,6 +14,7 @@ from .widgets import (Column, Display, Gtk, GLib, Meter, Pango, box, button, che
                       image, label, log, margins, panel, set_state, setting_row, setup_style, ui, NEEDS_ALPHA)
 from gi.repository import Gdk, Gio          # versions are pinned in widgets
 from . import core, dbusdisplay, pilot, rfb, sentinel
+from .orb import Orb
 
 APP_ID = "org.lethe.App"
 INSTALLED = os.path.exists("/etc/systemd/system/lethe-vpn.service")
@@ -92,10 +93,9 @@ class Window(Gtk.ApplicationWindow):
         page.append(top)
 
         hero = box(valign=Gtk.Align.CENTER, vexpand=True)
-        mark = image("lethe", 88)
-        mark.set_halign(Gtk.Align.CENTER)
-        hero.append(mark)
-        hero.append(margins(label("Private Session", "title", 0.5), top=24))
+        self.orb = Orb(height=216)                   # the Lethe mark, alive
+        hero.append(self.orb)
+        hero.append(margins(label("Private Session", "title", 0.5), top=14))
         hero.append(margins(label("Tails in a sealed machine with no disk.\nNothing remains when it ends.",
                                   "secondary", 0.5, wrap=True, chars=34), top=8))
         page.append(hero)
@@ -369,8 +369,8 @@ class Window(Gtk.ApplicationWindow):
     # ── launch ──────────────────────────────────────────────────────────────
     def _launch(self):
         col = Column(440, valign=Gtk.Align.CENTER, vexpand=True)
-        col.add(image("lethe", 56)).set_halign(Gtk.Align.CENTER)
-        col.add(margins(label("Starting your session", "title", 0.5, wrap=True), top=24))
+        col.add(Orb(height=168, busy=True))          # turning faster: work in progress
+        col.add(margins(label("Starting your session", "title", 0.5, wrap=True), top=10))
         self.launch_hint = col.add(margins(label("", "secondary", 0.5, wrap=True), top=8))
         self.step_rows = {}
         steps = col.add(box(css="panel divided", margin_top=30))
@@ -779,8 +779,8 @@ class Window(Gtk.ApplicationWindow):
     # ── the end ─────────────────────────────────────────────────────────────
     def _end(self):
         col = Column(480, valign=Gtk.Align.CENTER, vexpand=True, margin_start=22, margin_end=22)
-        col.add(image("lethe", 56)).set_halign(Gtk.Align.CENTER)
-        self.end_title = col.add(margins(label("", "title", 0.5, wrap=True), top=24))
+        col.add(Orb(height=150))
+        self.end_title = col.add(margins(label("", "title", 0.5, wrap=True), top=12))
         self.end_text = col.add(margins(label("", "secondary", 0.5, wrap=True), top=8))
         self.wipe_bar = col.add(Gtk.ProgressBar(margin_top=30, margin_start=70, margin_end=70))
         self.facts = col.add(box(css="panel", margin_top=30))

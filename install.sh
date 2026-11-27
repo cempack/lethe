@@ -103,12 +103,13 @@ $SUDO tee /usr/local/share/applications/lethe.desktop >/dev/null <<'EOF'
 [Desktop Entry]
 Name=Lethe
 GenericName=Private Session
-Comment=An amnesic, sandboxed Tails session that leaves no memory
+Comment=A private Tails session that leaves no memory. Made for journalists.
 Exec=/usr/local/bin/lethe
 Icon=lethe
 Terminal=false
 Type=Application
 Categories=System;Security;Network;
+Keywords=tails;tor;privacy;journalist;anonymous;secure;
 StartupWMClass=org.lethe.App
 EOF
 command -v gtk-update-icon-cache >/dev/null && $SUDO gtk-update-icon-cache -q -t -f /usr/local/share/icons/hicolor 2>/dev/null || true

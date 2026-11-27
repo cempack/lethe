@@ -31,6 +31,7 @@ LOADER = ("import('resource:///org/gnome/shell/ui/main.js').then(async M=>{let G
           "G.File.new_for_path('/home/amnesia/.local/share/gnome-shell/extensions/'+u),2));m.enableExtension(u)})")
 DOCK = (30, 32, 38)               # the dock's background, as in guest/extension/stylesheet.css
 EDGES = [(0.004, 0.3), (0.004, 0.55), (0.004, 0.8), (0.996, 0.3), (0.996, 0.55), (0.996, 0.8)]
+BAR = [(x, 0.008) for x in (0.27, 0.30, 0.33, 0.67, 0.70, 0.73)]    # empty stretches of the top bar
 
 
 class Pilot(threading.Thread):
@@ -61,11 +62,12 @@ class Pilot(threading.Thread):
         return (self._look() and max(self._at(0.3, 0.008)) < 60 and max(self._at(0.7, 0.008)) < 60
                 and self._near(self._at(0.004, 0.5), TAILS_BLUE))
 
-    def _edge(self):
-        """Mean colour along both screen edges: only the wallpaper shows there."""
+    def _edge(self, points=EDGES):
+        """Mean colour along both screen edges: only the wallpaper shows there (unless a window
+        fills the screen). With BAR: mean colour of the empty parts of the top bar."""
         if not self._look():
             return (0, 0, 0)
-        pts = [self._at(x, y) for x, y in EDGES]
+        pts = [self._at(x, y) for x, y in points]
         return tuple(sum(p[i] for p in pts) / len(pts) for i in range(3))
 
     def _wait(self, test, timeout, every=0.5):
@@ -99,10 +101,12 @@ class Pilot(threading.Thread):
 
     def _connect_tor(self, slow):
         """Tor Connection: "Connect to Tor automatically" (Alt+A), then Connect (Alt+C).
-        Inside Tails, setup.sh swaps to an imperceptibly brighter copy of the wallpaper
-        once Tor has bootstrapped: that change is the signal. Then the window is closed."""
+        Inside Tails, setup.sh swaps to an imperceptibly brighter copy of the wallpaper once Tor
+        has bootstrapped, and the Lethe desktop lights the top bar up for a few seconds: either
+        change is the signal (a large window hides the wallpaper, nothing hides the bar). Then
+        the window is closed."""
         self._settle(6 * slow)                     # the dock has just arrived; let the windows come to rest
-        before = self._edge()
+        before, bar = self._edge(), self._edge(BAR)
         for _ in range(3):
             seen = self._look() and bytes(self.px[::4099])
             self.control.tap("alt", "a")
@@ -114,7 +118,9 @@ class Pilot(threading.Thread):
                 break
             self.control.tap("alt", "esc")
             time.sleep(0.6 * slow)
-        self.online = self._wait(lambda: max(abs(a - b) for a, b in zip(self._edge(), before)) >= 1.5, 180 * slow, 1)
+        moved = lambda now, then: max(abs(a - b) for a, b in zip(now, then))
+        self.online = self._wait(lambda: moved(self._edge(), before) >= 1.5 or moved(self._edge(BAR), bar) >= 6,
+                                 180 * slow, 0.7)
         if self.online:
             time.sleep(1.5 * slow)                 # let the success page draw before closing it
             for _ in range(3):                     # the window sits in the middle: wait to see it go
@@ -218,4 +224,5 @@ class Pilot(threading.Thread):
         return False
 
     def _desktop_bar(self):
-        return self._look() and max(self._at(0.3, 0.008)) < 60
+        # The top bar is see-through over the Lethe wallpaper, whose sky has stars: look in three places.
+        return self._look() and sorted(max(self._at(x, 0.008)) for x in (0.27, 0.3, 0.33))[1] < 60

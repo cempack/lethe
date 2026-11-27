@@ -65,8 +65,8 @@ class LetheDash extends Dash {
 });
 
 // Where the dock is and when. It floats over the desktop and takes no room from windows. When a
-// window on this workspace is maximised it slides away, and comes back while the pointer rests on
-// the bottom edge of the screen, or on the dock itself.
+// window on this workspace reaches into its place it slides away, and comes back while the pointer
+// rests on the bottom edge of the screen, or on the dock itself.
 class Dock {
     constructor(scale) {
         this._scale = scale;
@@ -93,7 +93,7 @@ class Dock {
         const later = () => this._soon('sync', 120);
         global.window_manager.connectObject('size-changed', later, 'minimize', later, 'unminimize', later,
             'map', later, 'destroy', later, 'switch-workspace', later, this);
-        global.display.connectObject('restacked', later, this);
+        global.display.connectObject('restacked', later, 'grab-op-end', later, this);
         Main.layoutManager.connectObject('monitors-changed', () => this._place(), this);
         Main.overview.connectObject('showing', () => this._sync(), 'hidden', () => {
             this._dash.showAppsButton.checked = false;
@@ -142,15 +142,20 @@ class Dock {
             this.actor.translation_y = height;
     }
 
-    // A window that reaches from the top of the screen to the bottom would sit under the dock.
+    // A window that reaches into the dock's place (a maximised one, or simply a tall one) would
+    // have its lower edge, often its buttons, under the dock.
     _covered() {
         const workspace = global.workspace_manager.get_active_workspace();
         const primary = Main.layoutManager.primaryIndex;
-        const tall = w => w.maximized_vertically ?? ((w.get_maximize_flags?.() ?? 0) & Meta.MaximizeFlags.VERTICAL) !== 0;
+        const [left, top] = [this.actor.x, this.actor.y];
+        const [right, bottom] = [left + this.actor.width, top + this.actor.height];
         return global.get_window_actors().some(actor => {
             const w = actor.meta_window;
-            return w && !w.minimized && w.get_window_type() === Meta.WindowType.NORMAL &&
-                w.get_monitor() === primary && w.located_on_workspace(workspace) && tall(w);
+            if (!w || w.minimized || w.get_window_type() !== Meta.WindowType.NORMAL ||
+                w.get_monitor() !== primary || !w.located_on_workspace(workspace))
+                return false;
+            const f = w.get_frame_rect();
+            return f.x < right && f.x + f.width > left && f.y < bottom && f.y + f.height > top;
         });
     }
 
@@ -308,11 +313,33 @@ export default class LetheExtension extends Extension {
         this._dock = new Dock(scale);
         this._bar = new TopBar(this.dir);
         this._clipboard = new Clipboard();
+        // When Tor connects, Tails switches wallpapers (see setup.sh). Lethe watches for that from
+        // outside, but a large window can cover the wallpaper: so the top bar, which nothing covers,
+        // lights up for a few seconds as well. It is also how you see that the connection is made.
+        this._background = new Gio.Settings({schema_id: 'org.gnome.desktop.background'});
+        this._background.connectObject('changed::picture-uri', () => this._connected(), this);
+        this._connected();
         // Lethe used the Looking Glass console once, to load this. Close it for the rest of the session.
         new Gio.Settings({schema_id: 'org.gnome.shell'}).set_boolean('development-tools', false);
     }
 
+    _connected() {
+        if (!this._background.get_string('picture-uri').endsWith('lethe-online.png') || this._lit)
+            return;
+        Main.panel.add_style_class_name('lethe-online');
+        this._lit = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 6000, () => {
+            Main.panel.remove_style_class_name('lethe-online');
+            this._lit = -1;                           // once per session
+            return GLib.SOURCE_REMOVE;
+        });
+    }
+
     disable() {
+        this._background?.disconnectObject(this);
+        if (this._lit > 0)
+            GLib.source_remove(this._lit);
+        Main.panel.remove_style_class_name('lethe-online');
+        this._background = this._lit = null;
         this._clipboard?.destroy();
         this._bar?.destroy();
         this._dock?.destroy();

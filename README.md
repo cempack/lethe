@@ -1,51 +1,100 @@
+<div align="center">
+
+<img src="assets/lethe.svg" width="104" alt="Lethe">
+
 # Lethe
 
-A private session that leaves no memory. Lethe runs [Tails](https://tails.net) in a sealed, amnesic virtual machine inside one window, and erases it when you are done.
+**A private session that leaves no memory.**
+
+Lethe runs [Tails](https://tails.net) in a sealed, amnesic virtual machine inside one window,<br>
+connects it to Tor, and erases every trace of it when you are done.
+
+Made for journalists, and for anyone whose sources depend on what a computer forgets.
+
+<br>
+
+![Linux](https://img.shields.io/badge/Linux-Arch%20·%20Debian%20·%20Ubuntu%20·%20Fedora%20·%20openSUSE-1e2026?style=flat-square&labelColor=0b0b0c)
+![Tails](https://img.shields.io/badge/Tails-signature%20verified%20on%20every%20start-1e2026?style=flat-square&labelColor=0b0b0c)
+![Sandbox](https://img.shields.io/badge/sandbox-KVM%20%2B%20bubblewrap-1e2026?style=flat-square&labelColor=0b0b0c)
+![Network](https://img.shields.io/badge/network-Tor%20·%20optional%20WireGuard-1e2026?style=flat-square&labelColor=0b0b0c)
+![Memory](https://img.shields.io/badge/memory-wiped%20on%20exit-1e2026?style=flat-square&labelColor=0b0b0c)
+![Hardened](https://img.shields.io/badge/hardened%20with-Claude%20Mythos%205.2-5b7db1?style=flat-square&labelColor=0b0b0c)
+
+<br>
+
+<img src="docs/session.png" width="840" alt="A Lethe session: Tails running inside the Lethe window">
+
+</div>
+
+## Quick start
 
 ```sh
-gh repo clone cempack/lethe && ./lethe/install.sh    # Arch/Omarchy, Debian 12+, Ubuntu 24.04+, Fedora, openSUSE
-lethe             # open the app          (or "Lethe" in your app menu)
-lethe start       # open and start a session right away
-lethe stop        # destroy the running session immediately
-lethe doctor      # audit every protection layer on this machine
+gh repo clone cempack/lethe && ./lethe/install.sh
+lethe
 ```
 
-## What happens when you press Start
+Press **Start Session**. About a minute later you are on a Tails desktop, connected to Tor.
+Press **End Session** and its memory is overwritten with zeros.
 
-1. The Tails image is checked against the Tails signing key (fingerprint pinned in the code). This happens on download and again before every start.
-2. A sandbox is built and Tails boots inside it. No virtual disk exists.
-3. Lethe passes the Tails Welcome Screen for you (English, US keyboard, the defaults most Tails users have), applies stricter settings and the Lethe appearance, and connects to Tor automatically (can be turned off in Preferences, e.g. to use bridges). It does this by pressing keys, like a person: the image stays byte-for-byte the signed original.
-4. Your keyboard layout is translated as you type, so an AZERTY `a` is still an `a`.
-5. **Clipboard, one way.** Copy text or an image on your computer, come back to the session and paste: it is already on Tails' clipboard. What a password manager copies is never shared (they mark it, and Lethe honours the mark). Lethe hands it over on a small read-only disc that the Lethe desktop reads; nothing copied in Tails ever leaves it. **Ctrl+Alt+V** types your clipboard's text instead, for places the clipboard cannot reach (the Welcome Screen). Turn sharing off under Session.
-6. **The Lethe desktop** inside Tails: GNOME's own dock kept on the desktop (drag to reorder, right-click menus), which slides away when a window is maximised and returns when the pointer rests on the bottom edge; a graphite palette for every app, the Tor Connection window included; a dusk wallpaper; and GNOME's animations switched back on (GNOME turns them off without a graphics card, but this VM draws fast enough). Apps keep their own icons. It is a GNOME Shell extension that Lethe copies in and loads through Looking Glass right after login; the extension then switches Looking Glass off for the rest of the session.
-7. The session has a window of its own. Tails runs at your screen's real resolution and follows that window as you resize it; text is scaled to match your screen. **Ctrl+Alt+F** switches to full screen and back; in full screen nothing of Lethe is drawn over Tails.
-8. When the session ends, its memory is overwritten with zeros.
+<img align="right" src="docs/launcher.png" width="250" alt="The Lethe launcher">
 
-## Protection
-
-| Layer | What it does |
+| | |
 |---|---|
-| **Amnesia** | No virtual disk. Guest RAM is locked, kept out of swap and crash dumps, and zero-filled on exit. A separate guard process does the wipe if Lethe itself crashes or is killed. The session is destroyed before the computer suspends or hibernates. |
-| **Integrity** | Signature check on every start. Lethe's own files are root-owned and compared against a manifest before each session. Once installed, Lethe finds QEMU, the sandbox and its other tools in system folders only, and ignores environment variables that would load foreign code into it. |
-| **Network** | The VM has no network of its own. A separate relay (`passt`) carries its traffic: IPv4/TCP only, no inbound, no host DNS, fake addressing. Installed system-wide it runs as its own user behind a kernel firewall that only allows the public internet. |
-| **VPN before Tor** | Optional WireGuard profile, for the VM only. The tunnel lives in its own network namespace and is the VM's only route: if it drops, nothing leaves. Profiles are treated as data; `PostUp`-style commands are dropped. |
-| **Sandbox** | bubblewrap. The VM process sees its own binary, libraries, firmware and the image. No home folder, no D-Bus, no capabilities, no nested user namespaces, seccomp filter on. |
-| **Memory privacy** | Lethe, the VM and the wipe guard are closed to your other programs: they cannot attach a debugger, read the processes' memory, or open the guest's memory through `/proc`. |
-| **Display** | The VM never touches your desktop. QEMU shares the picture with Lethe over a private peer-to-peer D-Bus link (frames as fast as Tails draws them, shared memory, no copying), or over a private VNC socket where that is unavailable. Clipboard in one direction only (a read-only disc into the VM), no audio, USB or shared folders. |
-| **Sentinel** | Watches the host during a session and destroys it if a debugger attaches, someone logs in remotely, or a new keyboard appears. Hides the session while the screen is being captured (Hyprland). |
+| `lethe` | open the app |
+| `lethe start` | open it and start a session at once |
+| `lethe stop` | destroy the running session immediately |
+| `lethe doctor` | check every protection on this machine |
 
-## What it cannot do
+Runs on Arch/Omarchy, Debian 12+, Ubuntu 24.04+, Fedora and openSUSE. Uninstall with `./install.sh --uninstall`.
 
-- **Protect you from a compromised computer.** If the host's kernel or firmware is already controlled by someone else, they see everything. The Sentinel is a tripwire for realistic attacks, not an antivirus, and malware in the kernel can hide from it. For that threat, boot Tails from a USB stick on a machine you trust.
+## For journalists
+
+- **Talk to a source, open a leak, research a story** in a workspace that exists only in memory. There is no virtual disk to seize or recover.
+- **One click.** No USB stick, no reboot, no Welcome Screen, no Tor setup. Your own keyboard layout just works.
+- **Bring things in, never out.** What you copy on your computer can be pasted in Tails (text and images). Nothing copied in Tails ever reaches your computer, and passwords from a password manager are never shared.
+- **A tripwire while you work.** The session is destroyed at once if a debugger attaches, someone logs in remotely, or a new keyboard is plugged in. It hides itself while your screen is being recorded.
+
+## What protects a session
+
+| | |
+|---|---|
+| **Amnesia** | No disk. Guest memory is locked out of swap and crash dumps, zero-filled on exit, and wiped by a separate guard process even if Lethe is killed. The session dies before the computer sleeps. |
+| **Integrity** | The Tails image is checked against the pinned Tails signing key before every start. Lethe's own files are root-owned and compared with a manifest. |
+| **Sandbox** | QEMU/KVM inside bubblewrap: no home folder, no desktop socket, no D-Bus, no capabilities, no nested namespaces. |
+| **Memory privacy** | Lethe, the VM and the wipe guard are closed to your other programs: no debugger, no reading their memory through `/proc`. |
+| **Network** | The VM has no network of its own. A separate relay carries its traffic behind a kernel firewall: public internet only, never your LAN or this computer. |
+| **VPN before Tor** | Optional WireGuard profile, for the VM only. The tunnel is its only route: if it drops, nothing leaves. |
+| **Display** | The VM never touches your desktop. Its picture reaches Lethe over a private link; clipboard goes one way, on a read-only disc. |
+| **Sentinel** | Watches the host during a session and destroys it at the first sign of tampering. |
+
+Tails itself is hardened on the way in: Tor Browser at its Safest level, no usage history, no automounting, and a quiet Lethe desktop with GNOME's own dock.
+
+<details>
+<summary><b>What it cannot do</b></summary>
+
+<br>
+
+- **Protect you from a compromised computer.** If the host's kernel or firmware is controlled by someone else, they see everything. For that threat, boot Tails from a USB stick on a machine you trust.
 - **Hide that you use it.** The Tails image and Lethe are on your disk. Session content is not.
 - **Wipe everything.** Main guest memory is zero-filled; small device buffers are freed, not wiped. Booting the host with `init_on_free=1` closes that gap.
-- **Hide Tor from the network**, unless you use the VPN option or Tor bridges.
+- **Hide Tor from your network**, unless you use the VPN option or Tor bridges.
 
-## Notes
+</details>
 
-- Tor Browser starts at the Safest level.
-- Without hardware virtualisation Lethe still works, in slow software emulation.
-- On mains power Lethe holds the "performance" power profile while a session runs, and releases it afterwards.
-- Settings live in `~/.config/lethe/settings.json`. Uninstall with `./install.sh --uninstall`.
+<details>
+<summary><b>How a session starts</b></summary>
 
-Inter typeface: SIL Open Font License, see `assets/Inter-LICENSE.txt`.
+<br>
+
+1. The Tails image is verified, a sandbox is built, and Tails boots inside it.
+2. Lethe passes the Welcome Screen, applies stricter settings and connects to Tor by pressing keys, like a person would: the image stays byte-for-byte the signed original.
+3. Tails runs at your screen's real resolution and follows the window as you resize it. **Ctrl+Alt+F** is full screen; **Ctrl+Alt+V** types your clipboard where pasting cannot reach.
+4. When the session ends, its memory is overwritten and the window tells you what was wiped.
+
+</details>
+
+---
+
+<div align="center">
+<sub>Security audit and hardening pass by <b>Claude Mythos 5.2</b>. Inter typeface under the SIL Open Font License (<code>assets/Inter-LICENSE.txt</code>).</sub>
+</div>
